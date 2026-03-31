@@ -1,0 +1,76 @@
+<%- include('../partials/header', { title, user }) %>
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h1 class="h3 mb-1"><i class="bi bi-box-seam me-2 text-primary"></i>Released Parts</h1>
+    <p class="text-muted mb-0 small">
+      Showing only <span class="badge bg-success">Released</span> specifications.
+      Data is sourced directly from the PLM system.
+    </p>
+  </div>
+  <form method="GET" action="/parts" class="d-flex gap-2" role="search">
+    <input type="search" class="form-control form-control-sm" name="q" placeholder="Search parts…"
+           value="<%= search %>" aria-label="Search parts" style="min-width:220px;" />
+    <button class="btn btn-outline-secondary btn-sm" type="submit">
+      <i class="bi bi-search"></i>
+    </button>
+    <% if (search) { %>
+      <a href="/parts" class="btn btn-outline-danger btn-sm" title="Clear search">
+        <i class="bi bi-x-lg"></i>
+      </a>
+    <% } %>
+  </form>
+</div>
+
+<% if (parts.length === 0) { %>
+  <div class="text-center py-5 text-muted">
+    <i class="bi bi-inbox display-3 mb-3 d-block"></i>
+    <p class="lead">
+      <% if (search) { %>
+        No released parts matching "<strong><%= search %></strong>".
+      <% } else { %>
+        No released parts found.
+      <% } %>
+    </p>
+    <% if (search) { %>
+      <a href="/parts" class="btn btn-outline-secondary">Clear search</a>
+    <% } %>
+  </div>
+<% } else { %>
+  <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+    <% parts.forEach(function(part) { %>
+      <div class="col">
+        <div class="card h-100 shadow-sm part-card">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <span class="badge bg-secondary font-monospace"><%= part.partNumber %></span>
+              <span class="badge bg-success lifecycle-badge">
+                <i class="bi bi-check-circle me-1"></i><%= part.lifecycleState %>
+              </span>
+            </div>
+            <h5 class="card-title mb-1"><%= part.name %></h5>
+            <% if (part.description) { %>
+              <p class="card-text text-muted small mb-2"><%= part.description %></p>
+            <% } %>
+            <div class="small text-muted">
+              <i class="bi bi-clock-history me-1"></i>
+              Latest rev: <strong><%= part.latestRevision.revision %></strong>
+              &nbsp;|&nbsp; Released: <%= new Date(part.latestRevision.releaseDate).toLocaleDateString() %>
+            </div>
+          </div>
+          <div class="card-footer bg-transparent border-top-0">
+            <a href="/parts/<%= part.id %>" class="btn btn-primary btn-sm w-100">
+              <i class="bi bi-eye me-1"></i>View Specification
+            </a>
+          </div>
+        </div>
+      </div>
+    <% }); %>
+  </div>
+
+  <p class="text-muted small mt-4 text-end">
+    <i class="bi bi-info-circle me-1"></i>Showing <%= parts.length %> released part<%= parts.length !== 1 ? 's' : '' %>.
+  </p>
+<% } %>
+
+<%- include('../partials/footer') %>

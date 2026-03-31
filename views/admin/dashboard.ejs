@@ -1,0 +1,128 @@
+<%- include('../partials/header', { title, user }) %>
+
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1"><i class="bi bi-shield-check me-2 text-primary"></i>Access Management</h1>
+    <p class="text-muted mb-0 small">
+      Review and approve access requests. Only approved users can view released part specifications.
+    </p>
+  </div>
+  <a href="/admin/audit" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-journal-text me-1"></i>Audit Log
+  </a>
+</div>
+
+<!-- Pending Requests -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header d-flex align-items-center gap-2">
+    <i class="bi bi-hourglass-split text-warning"></i>
+    <strong>Pending Requests</strong>
+    <% if (pendingUsers.length > 0) { %>
+      <span class="badge bg-warning text-dark ms-1"><%= pendingUsers.length %></span>
+    <% } %>
+  </div>
+  <div class="card-body p-0">
+    <% if (pendingUsers.length === 0) { %>
+      <p class="text-muted p-3 mb-0">No pending access requests.</p>
+    <% } else { %>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Company</th>
+              <th>Reason</th>
+              <th>Requested</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% pendingUsers.forEach(function(u) { %>
+              <tr>
+                <td><%= u.name %></td>
+                <td><a href="mailto:<%= u.email %>"><%= u.email %></a></td>
+                <td><%= u.company || '–' %></td>
+                <td class="small text-muted" style="max-width:220px; white-space:pre-wrap;"><%= u.reason || '–' %></td>
+                <td class="small text-nowrap text-muted"><%= new Date(u.requestedAt).toLocaleDateString() %></td>
+                <td>
+                  <div class="d-flex gap-2 flex-wrap">
+                    <!-- Approve -->
+                    <form method="POST" action="/admin/users/<%= u.id %>/approve" class="d-inline">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                      <input type="hidden" name="notes" value="Access approved." />
+                      <button type="submit" class="btn btn-success btn-sm">
+                        <i class="bi bi-check-lg me-1"></i>Approve
+                      </button>
+                    </form>
+                    <!-- Reject -->
+                    <form method="POST" action="/admin/users/<%= u.id %>/reject" class="d-inline">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                      <input type="hidden" name="notes" value="Access request rejected." />
+                      <button type="submit" class="btn btn-danger btn-sm"
+                              onclick="return confirm('Reject access for <%= u.name %>?')">
+                        <i class="bi bi-x-lg me-1"></i>Reject
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<!-- Approved Users -->
+<div class="card shadow-sm">
+  <div class="card-header d-flex align-items-center gap-2">
+    <i class="bi bi-people text-success"></i>
+    <strong>Approved Users</strong>
+    <span class="badge bg-secondary ms-1"><%= allUsers.filter(u => u.isApproved).length %></span>
+  </div>
+  <div class="card-body p-0">
+    <% const approvedUsers = allUsers.filter(u => u.isApproved); %>
+    <% if (approvedUsers.length === 0) { %>
+      <p class="text-muted p-3 mb-0">No approved users yet.</p>
+    <% } else { %>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Company</th>
+              <th>Approved</th>
+              <th>Approved By</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% approvedUsers.forEach(function(u) { %>
+              <tr>
+                <td><%= u.name %></td>
+                <td><a href="mailto:<%= u.email %>"><%= u.email %></a></td>
+                <td><%= u.company || '–' %></td>
+                <td class="small text-nowrap text-muted"><%= u.approvedAt ? new Date(u.approvedAt).toLocaleDateString() : '–' %></td>
+                <td class="small text-muted"><%= u.approvedBy || '–' %></td>
+                <td>
+                  <form method="POST" action="/admin/users/<%= u.id %>/revoke" class="d-inline">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                    <button type="submit" class="btn btn-outline-danger btn-sm"
+                            onclick="return confirm('Revoke access for <%= u.name %>?')">
+                      <i class="bi bi-slash-circle me-1"></i>Revoke
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

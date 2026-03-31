@@ -1,0 +1,54 @@
+<%- include('../partials/header', { title, user }) %>
+
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1"><i class="bi bi-journal-text me-2 text-primary"></i>Audit Log</h1>
+    <p class="text-muted mb-0 small">
+      Record of all part and document views. Showing last 500 entries.
+    </p>
+  </div>
+  <a href="/admin/dashboard" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+  </a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <% if (entries.length === 0) { %>
+      <p class="text-muted p-3 mb-0">No audit entries recorded yet.</p>
+    <% } else { %>
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Timestamp</th>
+              <th>User</th>
+              <th>Part Number</th>
+              <th>Revision</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% entries.forEach(function(e) { %>
+              <tr>
+                <td class="text-nowrap small text-muted"><%= new Date(e.accessedAt).toLocaleString() %></td>
+                <td class="small"><%= e.userEmail %></td>
+                <td class="font-monospace small"><%= e.partNumber %></td>
+                <td class="small"><%= e.revision %></td>
+                <td>
+                  <% if (e.action === 'view_document') { %>
+                    <span class="badge bg-info text-dark"><i class="bi bi-file-earmark-text me-1"></i>Document</span>
+                  <% } else { %>
+                    <span class="badge bg-secondary"><i class="bi bi-eye me-1"></i>Part View</span>
+                  <% } %>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

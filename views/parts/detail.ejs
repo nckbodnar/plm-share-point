@@ -1,0 +1,143 @@
+<%- include('../partials/header', { title, user }) %>
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/parts">Released Parts</a></li>
+    <li class="breadcrumb-item active" aria-current="page"><%= part.partNumber %></li>
+  </ol>
+</nav>
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1">
+      <span class="font-monospace text-secondary me-2"><%= part.partNumber %></span>
+      <%= part.name %>
+    </h1>
+    <% if (part.description) { %>
+      <p class="text-muted mb-2"><%= part.description %></p>
+    <% } %>
+    <span class="badge bg-success fs-6">
+      <i class="bi bi-check-circle me-1"></i><%= part.lifecycleState %>
+    </span>
+  </div>
+  <a href="/parts" class="btn btn-outline-secondary btn-sm align-self-start">
+    <i class="bi bi-arrow-left me-1"></i>Back to list
+  </a>
+</div>
+
+<div class="row g-4">
+
+  <!-- Latest Released Revision -->
+  <div class="col-12">
+    <div class="card border-success shadow-sm">
+      <div class="card-header bg-success text-white d-flex align-items-center gap-2">
+        <i class="bi bi-star-fill"></i>
+        <strong>Latest Released Revision: <%= part.latestRevision.revision %></strong>
+        <span class="badge bg-white text-success ms-1">Current</span>
+      </div>
+      <div class="card-body">
+        <div class="row g-3 mb-3">
+          <div class="col-sm-4">
+            <div class="text-muted small">Release Date</div>
+            <div class="fw-semibold"><%= new Date(part.latestRevision.releaseDate).toLocaleDateString('en-GB', { year:'numeric', month:'long', day:'numeric' }) %></div>
+          </div>
+          <% if (part.latestRevision.releasedBy) { %>
+          <div class="col-sm-4">
+            <div class="text-muted small">Released By</div>
+            <div class="fw-semibold"><%= part.latestRevision.releasedBy %></div>
+          </div>
+          <% } %>
+          <div class="col-sm-4">
+            <div class="text-muted small">Lifecycle State</div>
+            <div>
+              <span class="badge bg-success"><%= part.latestRevision.lifecycleState %></span>
+            </div>
+          </div>
+        </div>
+
+        <% if (part.latestRevision.documentId) { %>
+          <div class="alert alert-info d-flex align-items-start gap-2 mb-3" role="note">
+            <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+            <span class="small">
+              The specification document is displayed inline below.
+              <strong>Bulk download is not available.</strong>
+            </span>
+          </div>
+          <div class="ratio ratio-4x3 border rounded doc-viewer mb-2">
+            <iframe
+              src="/parts/<%= part.id %>/documents/<%= part.latestRevision.documentId %>"
+              title="Specification: <%= part.partNumber %> Rev <%= part.latestRevision.revision %>"
+              class="rounded"
+              allowfullscreen
+              sandbox="allow-same-origin allow-scripts"
+            ></iframe>
+          </div>
+          <p class="text-muted small">
+            <i class="bi bi-file-earmark-text me-1"></i>
+            <%= part.latestRevision.specificationFileName || 'Specification document' %>
+          </p>
+        <% } else { %>
+          <div class="text-muted small fst-italic">No specification document attached to this revision.</div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <% if (part.previousRevision) { %>
+  <!-- Previous Released Revision -->
+  <div class="col-12">
+    <div class="card border-secondary shadow-sm">
+      <div class="card-header bg-light d-flex align-items-center gap-2">
+        <i class="bi bi-clock-history text-secondary"></i>
+        <strong>Previous Released Revision: <%= part.previousRevision.revision %></strong>
+      </div>
+      <div class="card-body">
+        <div class="row g-3 mb-3">
+          <div class="col-sm-4">
+            <div class="text-muted small">Release Date</div>
+            <div class="fw-semibold"><%= new Date(part.previousRevision.releaseDate).toLocaleDateString('en-GB', { year:'numeric', month:'long', day:'numeric' }) %></div>
+          </div>
+          <% if (part.previousRevision.releasedBy) { %>
+          <div class="col-sm-4">
+            <div class="text-muted small">Released By</div>
+            <div class="fw-semibold"><%= part.previousRevision.releasedBy %></div>
+          </div>
+          <% } %>
+          <div class="col-sm-4">
+            <div class="text-muted small">Lifecycle State</div>
+            <div>
+              <span class="badge bg-secondary"><%= part.previousRevision.lifecycleState %></span>
+            </div>
+          </div>
+        </div>
+
+        <% if (part.previousRevision.documentId) { %>
+          <div class="ratio ratio-4x3 border rounded doc-viewer mb-2">
+            <iframe
+              src="/parts/<%= part.id %>/documents/<%= part.previousRevision.documentId %>"
+              title="Specification: <%= part.partNumber %> Rev <%= part.previousRevision.revision %>"
+              class="rounded"
+              allowfullscreen
+              sandbox="allow-same-origin allow-scripts"
+            ></iframe>
+          </div>
+          <p class="text-muted small">
+            <i class="bi bi-file-earmark-text me-1"></i>
+            <%= part.previousRevision.specificationFileName || 'Specification document' %>
+          </p>
+        <% } else { %>
+          <div class="text-muted small fst-italic">No specification document attached to this revision.</div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+  <% } %>
+
+</div>
+
+<div class="mt-4 small text-muted">
+  <i class="bi bi-clock me-1"></i>
+  Last updated in PLM: <%= new Date(part.updatedAt).toLocaleString() %>
+</div>
+
+<%- include('../partials/footer') %>
