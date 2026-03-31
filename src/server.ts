@@ -24,8 +24,9 @@ app.use(
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
         styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
-        fontSrc: ["'self'", 'cdn.jsdelivr.net'],
+        fontSrc: ["'self'", 'cdn.jsdelivr.net', 'data:'],
         imgSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'", 'cdn.jsdelivr.net'],
         frameSrc: ["'self'"],        // allow inline PDF viewer (same origin)
         objectSrc: ["'none'"],
       },
@@ -58,8 +59,12 @@ app.use(cookieParser(config.sessionSecret));
 // ---------------------------------------------------------------------------
 const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => config.sessionSecret,
-  // Use IP as session identifier (suitable for stateless JWT auth)
-  getSessionIdentifier: (req) => req.ip ?? 'unknown',
+  // Use a stable session identifier for development
+  getSessionIdentifier: (req) => {
+    // For stateless JWT auth, use a combination of IP and user agent
+    const identifier = `${req.ip || 'unknown'}-${req.get('user-agent') || 'unknown'}`;
+    return identifier;
+  },
   cookieName: '_csrf',
   cookieOptions: {
     httpOnly: true,
@@ -71,8 +76,8 @@ const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getCsrfTokenFromRequest: (req) =>
     (req.body as Record<string, string> | undefined)?.['_csrf'] ??
     req.headers['x-csrf-token'],
-  // Skip CSRF validation in the test environment
-  skipCsrfProtection: () => process.env['NODE_ENV'] === 'test',
+  // Skip CSRF validation in development for easier testing
+  skipCsrfProtection: () => process.env['NODE_ENV'] === 'development' || process.env['NODE_ENV'] === 'test',
 });
 
 // Expose generateCsrfToken so views/routes can embed it

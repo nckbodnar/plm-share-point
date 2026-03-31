@@ -42,7 +42,13 @@ router.get('/login', (req, res) => {
     return;
   }
   const next = sanitizeRedirect(req.query['next']);
-  res.render('login', { title: 'Sign In', error: null, next, user: null });
+  res.render('login', { 
+    title: 'Sign In', 
+    error: null, 
+    next, 
+    user: null,
+    csrfToken: res.locals['csrfToken']
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -63,6 +69,7 @@ router.post('/login', authLimiter, async (req, res) => {
       error: 'Please provide your email and password.',
       next: redirectTo,
       user: null,
+      csrfToken: res.locals['csrfToken']
     });
     return;
   }
@@ -75,6 +82,7 @@ router.post('/login', authLimiter, async (req, res) => {
       error: 'Invalid email or password.',
       next: redirectTo,
       user: null,
+      csrfToken: res.locals['csrfToken']
     });
     return;
   }
@@ -88,6 +96,7 @@ router.post('/login', authLimiter, async (req, res) => {
           : 'Your access request is pending approval. You will be notified once it has been reviewed.',
       next: redirectTo,
       user: null,
+      csrfToken: res.locals['csrfToken']
     });
     return;
   }
@@ -120,7 +129,13 @@ router.get('/request-access', (req, res) => {
     res.redirect('/parts');
     return;
   }
-  res.render('request-access', { title: 'Request Access', error: null, success: false, user: null });
+  res.render('request-access', { 
+    title: 'Request Access', 
+    error: null, 
+    success: false, 
+    user: null,
+    csrfToken: res.locals['csrfToken']
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -143,6 +158,7 @@ router.post('/request-access', authLimiter, async (req, res) => {
       success: false,
       user: null,
       prefill: { email, name, company, reason },
+      csrfToken: res.locals['csrfToken']
     });
   };
 
@@ -181,7 +197,7 @@ router.post('/request-access', authLimiter, async (req, res) => {
     error: null,
     success: true,
     user: null,
-    prefill: {},
+    csrfToken: res.locals['csrfToken']
   });
 });
 

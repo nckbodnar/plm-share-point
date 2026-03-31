@@ -66,7 +66,7 @@ router.get('/', viewLimiter, async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/:id', viewLimiter, async (req, res) => {
   try {
-    const part = await getPlmService().getReleasedPartById(req.params['id']!);
+    const part = await getPlmService().getReleasedPartById(String(req.params['id']));
 
     // Audit log
     logAccess({
@@ -109,8 +109,8 @@ router.get('/:id', viewLimiter, async (req, res) => {
 router.get('/:id/documents/:docId', docLimiter, async (req, res) => {
   try {
     // First verify the part is released and the document belongs to it
-    const part = await getPlmService().getReleasedPartById(req.params['id']!);
-    const docId = req.params['docId']!;
+    const part = await getPlmService().getReleasedPartById(String(req.params['id']));
+    const docId = String(req.params['docId']);
 
     const validDocIds = [
       part.latestRevision.documentId,
