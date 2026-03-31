@@ -1,7 +1,7 @@
 # PLM SharePoint
 
 > **On-premise read-only web portal** that lets approved 3Shape employees view
-> Released part specifications from Aas PLM — without requiring a PLM "editor"
+> Released part specifications from Aras PLM — without requiring a PLM "editor"
 > licence.
 
 ---
@@ -80,8 +80,9 @@ cp .env.example .env
 # Edit .env:
 #   SESSION_SECRET and JWT_SECRET   → long random strings
 #   ADMIN_EMAIL                     → data owner's email address
-#   PLM_BASE_URL                    → http://your-plm-server/api
-#   PLM_USE_MOCK=false              → once you have a real PLM server
+#   PLM_TYPE                        → mock | aras | generic
+#   PLM_BASE_URL                    → Aras instance URL or generic REST base URL
+#   PLM_USERNAME / PLM_PASSWORD     → PLM credentials
 ```
 
 ### 3 — Build (TypeScript → JavaScript)
@@ -115,14 +116,39 @@ The first time the server starts it creates a default admin account:
 
 ### Mock mode (default for development)
 
-Set `PLM_USE_MOCK=true` in `.env`.  The application uses built-in sample data
-(5 released parts with realistic revisions).
+Set `PLM_TYPE=mock` in `.env` (or the legacy `PLM_USE_MOCK=true`).  The
+application uses built-in sample data (5 released parts with realistic
+revisions).
 
-### Real PLM server
+### Aras Innovator PLM (recommended)
 
-Set `PLM_USE_MOCK=false` and configure:
+Set `PLM_TYPE=aras` and configure the instance URL and credentials:
 
 ```
+PLM_TYPE=aras
+PLM_BASE_URL=http://localhost/UA-LPT-MYBO-Aras3Shape-development
+# PLM_ARAS_DATABASE is optional – defaults to the last URL path segment
+PLM_USERNAME=admin
+PLM_PASSWORD=<your-aras-password>
+```
+
+The `ArasPlmService` uses:
+* **SOAP/AML** (`POST {baseUrl}/Server/InnovatorServer.aspx`) for part queries.
+  The password is hashed with MD5 (upper-case hex) as required by all Aras
+  Innovator versions.
+* **Aras REST file endpoint** (`GET {baseUrl}/api/v1/File/{id}/content`) for
+  document downloads with HTTP Basic auth (username:MD5(password)).
+
+Parts are queried with `<state>Released</state>` filter over the `Part`
+ItemType.  Adjust `parseArasPartList()` in `src/services/plmService.ts` if your
+Aras instance uses custom ItemType names or a different state vocabulary.
+
+### Generic REST PLM
+
+Set `PLM_TYPE=generic` for any PLM exposing a standard REST API:
+
+```
+PLM_TYPE=generic
 PLM_BASE_URL=http://your-plm-server/api
 PLM_API_KEY=<read-only api key>     # preferred
 # or
@@ -130,7 +156,7 @@ PLM_USERNAME=<readonly user>
 PLM_PASSWORD=<password>
 ```
 
-The `RealPlmService` expects the PLM to expose:
+The `RealPlmService` expects:
 
 | Endpoint | Purpose |
 |---|---|

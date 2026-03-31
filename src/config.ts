@@ -32,16 +32,42 @@ export const config = {
   dbPath: optional('DB_PATH', path.join(process.cwd(), 'data', 'plm-sharepoint.db')),
 
   plm: {
-    /** Base URL of the PLM REST API */
+    /**
+     * Which PLM adapter to use.
+     *   'mock'    – built-in static data, no real server needed (default)
+     *   'aras'    – Aras Innovator PLM via SOAP/AML
+     *   'generic' – generic REST API (RealPlmService)
+     *
+     * When PLM_TYPE is not set the legacy PLM_USE_MOCK flag is honoured instead.
+     */
+    type: optional('PLM_TYPE', '') as 'mock' | 'aras' | 'generic' | '',
+
+    /** Base URL of the PLM server.
+     *  For Aras: the Innovator instance root, e.g. http://localhost/UA-LPT-MYBO-Aras3Shape-development
+     *  For generic REST: the REST API base, e.g. http://your-plm-server/api
+     */
     baseUrl: optional('PLM_BASE_URL', 'http://localhost:8080/api'),
-    /** Optional API key sent as a Bearer token */
+
+    /**
+     * Aras database / instance name.
+     * If not set, defaults to the last non-empty path segment of PLM_BASE_URL.
+     * Example: UA-LPT-MYBO-Aras3Shape-development
+     */
+    arasDatabase: optional('PLM_ARAS_DATABASE', ''),
+
+    /** Optional API key sent as a Bearer token (generic adapter only) */
     apiKey: process.env['PLM_API_KEY'],
-    /** Optional basic-auth credentials */
+
+    /** PLM username (Aras login name or generic basic-auth user) */
     username: process.env['PLM_USERNAME'],
+
+    /** PLM password (plain-text; the Aras adapter hashes it with MD5 before sending) */
     password: process.env['PLM_PASSWORD'],
+
     /** Request timeout in milliseconds */
     timeoutMs: parseInt(optional('PLM_TIMEOUT_MS', '10000'), 10),
-    /** When true, use mock PLM data (no real PLM server needed) */
+
+    /** @deprecated Use PLM_TYPE=mock instead. Kept for backward compatibility. */
     useMock: optional('PLM_USE_MOCK', 'true').toLowerCase() === 'true',
   },
 } as const;
