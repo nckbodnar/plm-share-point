@@ -6,7 +6,7 @@
   "moduleFileExtensions": ["ts", "js", "json"],
   "collectCoverage": false,
   "transform": {
-    "^.+\\.ts$": ["ts-jest", { "tsconfig": { "strict": true } }]
+    "^.+\\.ts$": ["ts-jest", { "tsconfig": { "strict": true, "types": ["jest", "node"] } }]
   },
   "globals": {}
 }

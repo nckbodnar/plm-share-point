@@ -100,6 +100,33 @@ function xmlAttr(attrs: string, name: string): string {
 }
 
 /**
+ * Find all `<Item type="File">` leaf nodes anywhere in an AML XML string.
+ *
+ * `File` items are always leaf nodes in the Aras response (they never contain
+ * nested `<Item>` elements), so a non-greedy regex is safe here.
+ *
+ * Exported so unit tests can exercise it without a live Aras server.
+ */
+export function findAllFileItems(
+  xml: string,
+): Array<{ fileId: string; fileName: string; mimeType: string }> {
+  const files: Array<{ fileId: string; fileName: string; mimeType: string }> = [];
+  const fileRe = /<Item\b([^>]*type="File"[^>]*)>([\s\S]*?)<\/Item>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = fileRe.exec(xml)) !== null) {
+    const attrStr = m[1]!;
+    const body = m[2]!;
+    if (/isError="1"/i.test(attrStr)) continue;
+    const fileId = xmlAttr(attrStr, 'id') || xmlText(body, 'id');
+    if (!fileId) continue;
+    const fileName = xmlText(body, 'filename');
+    const mimeType = xmlText(body, 'mimetype') || 'application/octet-stream';
+    files.push({ fileId, fileName, mimeType });
+  }
+  return files;
+}
+
+/**
  * Parse a flat list of `<Item type="Part">` elements from an Aras SOAP/AML
  * response XML string.
  *
@@ -187,6 +214,8 @@ export class ArasPlmService implements IPlmService {
   private readonly authPassword: string;
   private readonly http: AxiosInstance;
   private readonly baseUrl: string;
+  /** Cached OAuth token for Aras REST API v1 file downloads */
+  private tokenCache: { token: string; expiresAt: number } | null = null;
 
   constructor() {
     this.baseUrl = config.plm.baseUrl.replace(/\/+$/, '');
@@ -273,23 +302,134 @@ export class ArasPlmService implements IPlmService {
   async getDocumentContent(
     documentId: string,
   ): Promise<{ data: Buffer; contentType: string; fileName: string }> {
-    // Aras REST file download: GET {baseUrl}/api/v1/File/{fileId}/content
-    // Basic auth uses username + MD5(password) which Aras accepts on its REST layer.
-    const url = `${this.baseUrl}/api/v1/File/${encodeURIComponent(documentId)}/content`;
-    const basicCredential = Buffer.from(`${this.authUser}:${this.authPassword}`).toString('base64');
+    // documentId is the Aras Part GUID (set by parseArasPartList).
+    // Step 1 – resolve the Part to its first attached File via AML.
+    const fileInfo = await this.findFirstPartFile(documentId);
+    if (!fileInfo) {
+      const err = new Error(`No specification file is attached to part "${documentId}" in Aras.`);
+      (err as NodeJS.ErrnoException).code = 'NOT_FOUND';
+      throw err;
+    }
 
-    const res = await this.http.get<Buffer>(url, {
-      headers: { Authorization: `Basic ${basicCredential}` },
-      responseType: 'arraybuffer',
+    // Step 2 – download the file from the Aras vault using the REST v1 API.
+    return this.downloadArasFile(fileInfo.fileId, fileInfo.fileName, fileInfo.mimeType);
+  }
+
+  /**
+   * Obtain an OAuth2 Bearer token from the Aras REST API v1 token endpoint.
+   * The token is cached for its stated lifetime minus a 60-second safety margin.
+   *
+   * Aras expects the password already hashed to upper-case MD5 in the token
+   * request body.
+   */
+  private async getRestToken(): Promise<string> {
+    const now = Date.now();
+    if (this.tokenCache && this.tokenCache.expiresAt > now + 60_000) {
+      return this.tokenCache.token;
+    }
+
+    const params = new URLSearchParams({
+      grant_type: 'password',
+      username: this.authUser,
+      password: this.authPassword, // already MD5-hashed upper-case hex
+      database: this.database,
     });
 
+    const res = await this.http.post<{ access_token: string; expires_in?: number }>(
+      `${this.baseUrl}/api/v1/Token`,
+      params.toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+    );
+
+    const token = res.data.access_token;
+    const expiresIn = res.data.expires_in ?? 3600;
+    this.tokenCache = { token, expiresAt: now + expiresIn * 1000 };
+    return token;
+  }
+
+  /**
+   * Navigate the Aras relationship chain
+   *   Part → Part Documents → Document → Document File → File
+   * and return the first attached `File` item's metadata.
+   *
+   * Returns `null` when no file is found (e.g. no documents attached to the
+   * Part, or the SOAP request fails).
+   */
+  private async findFirstPartFile(
+    partId: string,
+  ): Promise<{ fileId: string; fileName: string; mimeType: string } | null> {
+    const aml =
+      `<Item type="Part" action="get" id="${escapeXml(partId)}" select="id">` +
+      '<Relationships>' +
+      '<Item type="Part Documents" action="get" select="id">' +
+      '<related_id>' +
+      '<Item type="Document" action="get" select="id">' +
+      '<Relationships>' +
+      '<Item type="Document File" action="get" select="id">' +
+      '<related_id>' +
+      '<Item type="File" action="get" select="id,filename,mimetype"/>' +
+      '</related_id>' +
+      '</Item>' +
+      '</Relationships>' +
+      '</Item>' +
+      '</related_id>' +
+      '</Item>' +
+      '</Relationships>' +
+      '</Item>';
+
+    let xml: string;
+    try {
+      xml = await this.callAml(aml);
+    } catch {
+      return null;
+    }
+
+    const files = findAllFileItems(xml);
+    return files[0] ?? null;
+  }
+
+  /**
+   * Download an Aras File item by its GUID using the REST v1 OData endpoint:
+   *   GET {baseUrl}/api/v1/File('{fileId}')/$value
+   *
+   * Authentication tries OAuth Bearer token first; falls back to Basic auth
+   * (username : MD5_password) for older Aras instances that do not support
+   * the token endpoint.
+   */
+  private async downloadArasFile(
+    fileId: string,
+    knownFileName: string,
+    knownMimeType: string,
+  ): Promise<{ data: Buffer; contentType: string; fileName: string }> {
+    // OData URL format required by Aras REST v1
+    const url = `${this.baseUrl}/api/v1/File('${encodeURIComponent(fileId)}')/$value`;
+
+    let res: import('axios').AxiosResponse<ArrayBuffer>;
+
+    // Try OAuth Bearer token first (Aras 12+ / 11 SP10+)
+    try {
+      const token = await this.getRestToken();
+      res = await this.http.get<ArrayBuffer>(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'arraybuffer',
+      });
+    } catch {
+      // Fall back to HTTP Basic auth (username:MD5_password) for older instances
+      const basicCred = Buffer.from(`${this.authUser}:${this.authPassword}`).toString('base64');
+      res = await this.http.get<ArrayBuffer>(url, {
+        headers: { Authorization: `Basic ${basicCred}` },
+        responseType: 'arraybuffer',
+      });
+    }
+
     const contentType =
-      (res.headers['content-type'] as string | undefined) ?? 'application/octet-stream';
+      (res.headers['content-type'] as string | undefined) ??
+      (knownMimeType || 'application/octet-stream');
     const disposition = (res.headers['content-disposition'] as string | undefined) ?? '';
     const fileNameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
     const fileName = fileNameMatch
       ? fileNameMatch[1].replace(/['"]/g, '')
-      : `document-${documentId}`;
+      : knownFileName || `file-${fileId}`;
 
     return { data: Buffer.from(res.data), contentType, fileName };
   }

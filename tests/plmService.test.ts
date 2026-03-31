@@ -2,6 +2,7 @@ import {
   MockPlmService,
   ArasPlmService,
   parseArasPartList,
+  findAllFileItems,
   getPlmService,
   resetPlmService,
 } from '../src/services/plmService';
@@ -217,6 +218,61 @@ describe('parseArasPartList', () => {
 
     const [p] = parseArasPartList(xml);
     expect(p!.name).toBe('PN-X');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findAllFileItems – XML File leaf node extractor
+// ---------------------------------------------------------------------------
+
+describe('findAllFileItems', () => {
+  it('returns empty array when there are no File items', () => {
+    expect(findAllFileItems('<AML><Item type="Part" id="p1"/></AML>')).toHaveLength(0);
+  });
+
+  it('extracts a single File item', () => {
+    const xml =
+      '<Item type="File" id="f1">' +
+      '<filename>spec.pdf</filename>' +
+      '<mimetype>application/pdf</mimetype>' +
+      '</Item>';
+    const files = findAllFileItems(xml);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toEqual({ fileId: 'f1', fileName: 'spec.pdf', mimeType: 'application/pdf' });
+  });
+
+  it('extracts multiple File items from a nested AML response', () => {
+    const xml =
+      '<Item type="Document File" id="df1"><related_id>' +
+      '<Item type="File" id="f1"><filename>a.pdf</filename><mimetype>application/pdf</mimetype></Item>' +
+      '</related_id></Item>' +
+      '<Item type="Document File" id="df2"><related_id>' +
+      '<Item type="File" id="f2"><filename>b.pdf</filename><mimetype>application/pdf</mimetype></Item>' +
+      '</related_id></Item>';
+    const files = findAllFileItems(xml);
+    expect(files).toHaveLength(2);
+    expect(files[0]!.fileId).toBe('f1');
+    expect(files[1]!.fileId).toBe('f2');
+  });
+
+  it('skips error File items (isError="1")', () => {
+    const xml =
+      '<Item type="File" id="f1" isError="1"><filename>bad.pdf</filename></Item>' +
+      '<Item type="File" id="f2"><filename>good.pdf</filename><mimetype>application/pdf</mimetype></Item>';
+    const files = findAllFileItems(xml);
+    expect(files).toHaveLength(1);
+    expect(files[0]!.fileId).toBe('f2');
+  });
+
+  it('skips File items without an id', () => {
+    const xml = '<Item type="File"><filename>no-id.pdf</filename></Item>';
+    expect(findAllFileItems(xml)).toHaveLength(0);
+  });
+
+  it('defaults mimeType to application/octet-stream when mimetype is absent', () => {
+    const xml = '<Item type="File" id="f1"><filename>file.bin</filename></Item>';
+    const files = findAllFileItems(xml);
+    expect(files[0]!.mimeType).toBe('application/octet-stream');
   });
 });
 
