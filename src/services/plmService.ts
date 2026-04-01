@@ -593,6 +593,61 @@ function mapApiPart(p: PlmApiPart): Part {
 // Mock implementation
 // ---------------------------------------------------------------------------
 
+/**
+ * Build a minimal but valid PDF buffer for mock document viewing.
+ * All content is ASCII, so string length === byte offset — safe to use
+ * directly as PDF byte offsets in the cross-reference table.
+ */
+function buildMockPdf(partNumber: string, docId: string): Buffer {
+  const stream = [
+    'BT',
+    '/F1 14 Tf',
+    '50 760 Td',
+    `(PLM Specification Document) Tj`,
+    '0 -22 Td',
+    `/F1 11 Tf`,
+    `(Part Number: ${partNumber}) Tj`,
+    '0 -18 Td',
+    `(Document ID: ${docId}) Tj`,
+    '0 -18 Td',
+    `(This is a placeholder document.) Tj`,
+    '0 -18 Td',
+    `(In production the real PDF is streamed from the PLM server.) Tj`,
+    'ET',
+  ].join('\n');
+  const streamLen = stream.length; // ASCII only → length === byte count
+
+  let pdf = '';
+  pdf += '%PDF-1.4\n';
+
+  const off1 = pdf.length;
+  pdf += '1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n';
+
+  const off2 = pdf.length;
+  pdf += '2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n';
+
+  const off3 = pdf.length;
+  pdf +=
+    '3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]' +
+    ' /Contents 4 0 R /Resources <</Font <</F1 <</Type /Font' +
+    ' /Subtype /Type1 /BaseFont /Helvetica>>>>>>>> >>\nendobj\n';
+
+  const off4 = pdf.length;
+  pdf += `4 0 obj\n<</Length ${streamLen}>>\nstream\n${stream}\nendstream\nendobj\n`;
+
+  const xrefPos = pdf.length;
+  pdf += 'xref\n';
+  pdf += '0 5\n';
+  pdf += `0000000000 65535 f \n`;
+  pdf += `${String(off1).padStart(10, '0')} 00000 n \n`;
+  pdf += `${String(off2).padStart(10, '0')} 00000 n \n`;
+  pdf += `${String(off3).padStart(10, '0')} 00000 n \n`;
+  pdf += `${String(off4).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<</Size 5 /Root 1 0 R>>\nstartxref\n${xrefPos}\n%%EOF\n`;
+
+  return Buffer.from(pdf, 'utf8');
+}
+
 const MOCK_PARTS: Part[] = [
   {
     id: 'part-001',
@@ -700,19 +755,63 @@ const MOCK_PARTS: Part[] = [
     },
     updatedAt: '2024-04-01T11:00:00Z',
   },
+  {
+    id: 'part-006',
+    partNumber: 'PN-10006',
+    name: 'Healing Abutment – Regular Platform',
+    description: 'Titanium healing abutment for guided tissue shaping during osseointegration phase.',
+    lifecycleState: 'Released',
+    latestRevision: {
+      revision: 'B',
+      releaseDate: '2024-05-10',
+      releasedBy: 'Morten Falk Reventlow',
+      lifecycleState: 'Released',
+      documentId: 'doc-006-B',
+      specificationFileName: 'PN-10006_RevB_Specification.pdf',
+    },
+    previousRevision: {
+      revision: 'A',
+      releaseDate: '2023-03-01',
+      releasedBy: 'Morten Falk Reventlow',
+      lifecycleState: 'Released',
+      documentId: 'doc-006-A',
+      specificationFileName: 'PN-10006_RevA_Specification.pdf',
+    },
+    updatedAt: '2024-05-10T08:00:00Z',
+  },
+  {
+    id: 'part-007',
+    partNumber: 'PN-10007',
+    name: 'PEEK Temporary Crown – Universal',
+    description: 'PEEK-based temporary crown blank for CAD/CAM milling, mono-colour, A2 shade.',
+    lifecycleState: 'Released',
+    latestRevision: {
+      revision: 'C',
+      releaseDate: '2024-06-15',
+      releasedBy: 'Morten Falk Reventlow',
+      lifecycleState: 'Released',
+      documentId: 'doc-007-C',
+      specificationFileName: 'PN-10007_RevC_Specification.pdf',
+    },
+    previousRevision: {
+      revision: 'B',
+      releaseDate: '2023-12-01',
+      releasedBy: 'Morten Falk Reventlow',
+      lifecycleState: 'Released',
+      documentId: 'doc-007-B',
+      specificationFileName: 'PN-10007_RevB_Specification.pdf',
+    },
+    updatedAt: '2024-06-15T14:30:00Z',
+  },
 ];
-
-/** In-memory mock document store (returns a simple text blob) */
-const MOCK_DOCUMENT_CONTENT = `This is a placeholder specification document.
-In a real deployment this file would be streamed from the PLM server.
-Part specification data is intentionally not downloadable in bulk.`;
 
 const MOCK_ASSEMBLIES: Assembly[] = [
   {
     id: 'asm-001',
     assemblyNumber: 'ASM-20001',
     name: 'Standard Implant Kit',
-    description: 'Complete kit for standard implant placement including scanning body, abutment screw and impression coping.',
+    description:
+      'Complete kit for standard implant placement including scanning body, abutment screw and impression coping.',
     lifecycleState: 'Released',
     latestRevision: {
       revision: 'B',
@@ -723,6 +822,7 @@ const MOCK_ASSEMBLIES: Assembly[] = [
         { part: { ...MOCK_PARTS[0]! }, quantity: 1, referenceDesignator: 'SB1' },
         { part: { ...MOCK_PARTS[3]! }, quantity: 2, referenceDesignator: 'SC1' },
         { part: { ...MOCK_PARTS[4]! }, quantity: 1, referenceDesignator: 'IC1' },
+        { part: { ...MOCK_PARTS[5]! }, quantity: 1, referenceDesignator: 'HA1' },
       ],
     },
     previousRevision: {
@@ -731,8 +831,8 @@ const MOCK_ASSEMBLIES: Assembly[] = [
       releasedBy: 'Morten Falk Reventlow',
       lifecycleState: 'Released',
       components: [
-        { part: { ...MOCK_PARTS[0]! }, quantity: 1 },
-        { part: { ...MOCK_PARTS[3]! }, quantity: 2 },
+        { part: { ...MOCK_PARTS[0]! }, quantity: 1, referenceDesignator: 'SB1' },
+        { part: { ...MOCK_PARTS[3]! }, quantity: 2, referenceDesignator: 'SC1' },
       ],
     },
     updatedAt: '2024-03-20T09:00:00Z',
@@ -744,6 +844,17 @@ const MOCK_ASSEMBLIES: Assembly[] = [
     description: 'Milling blank and calibration block for zirconia crown workflow.',
     lifecycleState: 'Released',
     latestRevision: {
+      revision: 'B',
+      releaseDate: '2024-05-01',
+      releasedBy: 'Morten Falk Reventlow',
+      lifecycleState: 'Released',
+      components: [
+        { part: { ...MOCK_PARTS[1]! }, quantity: 3, referenceDesignator: 'ZB1' },
+        { part: { ...MOCK_PARTS[2]! }, quantity: 1, referenceDesignator: 'CB1' },
+        { part: { ...MOCK_PARTS[6]! }, quantity: 2, referenceDesignator: 'TC1' },
+      ],
+    },
+    previousRevision: {
       revision: 'A',
       releaseDate: '2024-02-10',
       releasedBy: 'Morten Falk Reventlow',
@@ -753,7 +864,41 @@ const MOCK_ASSEMBLIES: Assembly[] = [
         { part: { ...MOCK_PARTS[2]! }, quantity: 1, referenceDesignator: 'CB1' },
       ],
     },
-    updatedAt: '2024-02-10T12:00:00Z',
+    updatedAt: '2024-05-01T12:00:00Z',
+  },
+  {
+    id: 'asm-003',
+    assemblyNumber: 'ASM-20003',
+    name: 'Full Arch Immediate Loading Kit',
+    description:
+      'Multi-unit assembly for immediate loading full-arch protocols — includes scanning bodies, healing abutments and impression copings.',
+    lifecycleState: 'Released',
+    latestRevision: {
+      revision: 'C',
+      releaseDate: '2024-07-01',
+      releasedBy: 'Morten Falk Reventlow',
+      lifecycleState: 'Released',
+      components: [
+        { part: { ...MOCK_PARTS[0]! }, quantity: 6, referenceDesignator: 'SB1-SB6' },
+        { part: { ...MOCK_PARTS[3]! }, quantity: 12, referenceDesignator: 'SC1' },
+        { part: { ...MOCK_PARTS[4]! }, quantity: 6, referenceDesignator: 'IC1-IC6' },
+        { part: { ...MOCK_PARTS[5]! }, quantity: 6, referenceDesignator: 'HA1-HA6' },
+        { part: { ...MOCK_PARTS[6]! }, quantity: 2, referenceDesignator: 'TC1' },
+      ],
+    },
+    previousRevision: {
+      revision: 'B',
+      releaseDate: '2024-02-15',
+      releasedBy: 'Morten Falk Reventlow',
+      lifecycleState: 'Released',
+      components: [
+        { part: { ...MOCK_PARTS[0]! }, quantity: 4, referenceDesignator: 'SB1-SB4' },
+        { part: { ...MOCK_PARTS[3]! }, quantity: 8, referenceDesignator: 'SC1' },
+        { part: { ...MOCK_PARTS[4]! }, quantity: 4, referenceDesignator: 'IC1-IC4' },
+        { part: { ...MOCK_PARTS[5]! }, quantity: 4, referenceDesignator: 'HA1-HA4' },
+      ],
+    },
+    updatedAt: '2024-07-01T10:00:00Z',
   },
 ];
 
@@ -788,10 +933,18 @@ export class MockPlmService implements IPlmService {
       throw error;
     }
 
+    // Find the part that owns this document for better PDF metadata
+    const owningPart = MOCK_PARTS.find(
+      (p) =>
+        p.latestRevision.documentId === documentId ||
+        p.previousRevision?.documentId === documentId,
+    );
+    const partNumber = owningPart?.partNumber ?? 'UNKNOWN';
+
     return {
-      data: Buffer.from(MOCK_DOCUMENT_CONTENT, 'utf-8'),
-      contentType: 'text/plain; charset=utf-8',
-      fileName: `${documentId}-specification.txt`,
+      data: buildMockPdf(partNumber, documentId),
+      contentType: 'application/pdf',
+      fileName: `${documentId}-specification.pdf`,
     };
   }
 

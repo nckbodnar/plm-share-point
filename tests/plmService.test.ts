@@ -104,6 +104,97 @@ describe('MockPlmService', () => {
         code: 'NOT_FOUND',
       });
     });
+
+    it('returns application/pdf content type', async () => {
+      const part = await svc.getReleasedPartById('part-001');
+      const docId = part.latestRevision.documentId!;
+      const result = await svc.getDocumentContent(docId);
+      expect(result.contentType).toBe('application/pdf');
+    });
+
+    it('returns a valid PDF buffer (starts with %PDF-)', async () => {
+      const part = await svc.getReleasedPartById('part-001');
+      const docId = part.latestRevision.documentId!;
+      const result = await svc.getDocumentContent(docId);
+      expect(result.data.slice(0, 5).toString('ascii')).toBe('%PDF-');
+    });
+
+    it('returns a .pdf file name', async () => {
+      const part = await svc.getReleasedPartById('part-001');
+      const docId = part.latestRevision.documentId!;
+      const result = await svc.getDocumentContent(docId);
+      expect(result.fileName).toMatch(/\.pdf$/);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // getAssemblies
+  // ---------------------------------------------------------------------------
+
+  describe('getAssemblies', () => {
+    it('returns a non-empty array', async () => {
+      const assemblies = await svc.getAssemblies();
+      expect(assemblies.length).toBeGreaterThan(0);
+    });
+
+    it('all returned assemblies have lifecycleState === "Released"', async () => {
+      const assemblies = await svc.getAssemblies();
+      assemblies.forEach((a) => {
+        expect(a.lifecycleState).toBe('Released');
+      });
+    });
+
+    it('all assemblies have a latestRevision with at least one component', async () => {
+      const assemblies = await svc.getAssemblies();
+      assemblies.forEach((a) => {
+        expect(a.latestRevision).toBeDefined();
+        expect(a.latestRevision.components.length).toBeGreaterThan(0);
+      });
+    });
+
+    it('at least one assembly has a previousRevision', async () => {
+      const assemblies = await svc.getAssemblies();
+      expect(assemblies.some((a) => a.previousRevision !== undefined)).toBe(true);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // getAssemblyById
+  // ---------------------------------------------------------------------------
+
+  describe('getAssemblyById', () => {
+    it('returns a specific assembly by ID', async () => {
+      const asm = await svc.getAssemblyById('asm-001');
+      expect(asm.assemblyNumber).toBe('ASM-20001');
+      expect(asm.lifecycleState).toBe('Released');
+    });
+
+    it('throws NOT_FOUND for an unknown ID', async () => {
+      await expect(svc.getAssemblyById('nonexistent')).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+    });
+
+    it('returns previousRevision when it exists', async () => {
+      const asm = await svc.getAssemblyById('asm-001');
+      expect(asm.previousRevision).toBeDefined();
+      expect(asm.previousRevision!.revision).toBeTruthy();
+    });
+
+    it('components in latest revision have valid part references', async () => {
+      const asm = await svc.getAssemblyById('asm-001');
+      asm.latestRevision.components.forEach((c) => {
+        expect(c.part.id).toBeTruthy();
+        expect(c.part.partNumber).toBeTruthy();
+        expect(c.quantity).toBeGreaterThan(0);
+      });
+    });
+
+    it('asm-003 has 5 components in latest revision', async () => {
+      const asm = await svc.getAssemblyById('asm-003');
+      expect(asm.latestRevision.components.length).toBe(5);
+      expect(asm.previousRevision).toBeDefined();
+    });
   });
 });
 

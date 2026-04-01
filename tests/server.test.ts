@@ -327,3 +327,122 @@ describe('GET /admin/audit', () => {
     expect(res.text).toContain('Audit Log');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Assemblies routes
+// ---------------------------------------------------------------------------
+
+describe('GET /assemblies', () => {
+  it('redirects to /login when unauthenticated', async () => {
+    const res = await request(app).get('/assemblies');
+    expect(res.status).toBe(302);
+    expect(res.headers['location']).toContain('/login');
+  });
+
+  it('returns 200 with assembly list when authenticated', async () => {
+    const res = await request(app)
+      .get('/assemblies')
+      .set('Cookie', `auth_token=${approvedUserToken}`);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Assemblies');
+    expect(res.text).toContain('ASM-20001');
+  });
+
+  it('shows all 3 mock assemblies', async () => {
+    const res = await request(app)
+      .get('/assemblies')
+      .set('Cookie', `auth_token=${approvedUserToken}`);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('ASM-20001');
+    expect(res.text).toContain('ASM-20002');
+    expect(res.text).toContain('ASM-20003');
+  });
+
+  it('filters assemblies by search query', async () => {
+    const res = await request(app)
+      .get('/assemblies?q=zirconia')
+      .set('Cookie', `auth_token=${approvedUserToken}`);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Zirconia');
+    expect(res.text).not.toContain('ASM-20001');
+  });
+});
+
+describe('GET /assemblies/:id', () => {
+  it('returns 200 with assembly detail for authenticated user', async () => {
+    const res = await request(app)
+      .get('/assemblies/asm-001')
+      .set('Cookie', `auth_token=${approvedUserToken}`);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('ASM-20001');
+    expect(res.text).toContain('Bill of Materials');
+  });
+
+  it('shows revision switcher when previousRevision exists', async () => {
+    const res = await request(app)
+      .get('/assemblies/asm-001')
+      .set('Cookie', `auth_token=${approvedUserToken}`);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Previous');
+  });
+
+  it('returns 404 for unknown assembly', async () => {
+    const res = await request(app)
+      .get('/assemblies/unknown-asm')
+      .set('Cookie', `auth_token=${approvedUserToken}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 302 redirect when unauthenticated', async () => {
+    const res = await request(app).get('/assemblies/asm-001');
+    expect(res.status).toBe(302);
+  });
+});
+
+describe('GET /assemblies/:id/bom.json', () => {
+  it('returns JSON with nodes and edges for latest revision', async () => {
+    const res = await request(app)
+      .get('/assemblies/asm-001/bom.json')
+      .set('Cookie', `auth_token=${approvedUserToken}`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/json');
+    const body = JSON.parse(res.text) as { nodes: unknown[]; edges: unknown[] };
+    expect(body.nodes.length).toBeGreaterThan(1); // root + at least 1 part
+    expect(body.edges.length).toBeGreaterThan(0);
+  });
+
+  it('root node has isRoot=true', async () => {
+    const res = await request(app)
+      .get('/assemblies/asm-001/bom.json')
+      .set('Cookie', `auth_token=${approvedUserToken}`);
+    const body = JSON.parse(res.text) as { nodes: Array<{ data: { isRoot: boolean } }> };
+    const root = body.nodes.find((n) => n.data.isRoot);
+    expect(root).toBeDefined();
+  });
+
+  it('returns previous revision BOM when ?rev= param is provided', async () => {
+    const res = await request(app)
+      .get('/assemblies/asm-001/bom.json?rev=A')
+      .set('Cookie', `auth_token=${approvedUserToken}`);
+    expect(res.status).toBe(200);
+    const body = JSON.parse(res.text) as { nodes: unknown[]; edges: unknown[] };
+    // Previous revision A has 2 components (+ root = 3 nodes)
+    expect(body.nodes.length).toBe(3);
+  });
+
+  it('returns 404 JSON for unknown assembly', async () => {
+    const res = await request(app)
+      .get('/assemblies/unknown-asm/bom.json')
+      .set('Cookie', `auth_token=${approvedUserToken}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('asm-003 latest BOM has 6 nodes (root + 5 components)', async () => {
+    const res = await request(app)
+      .get('/assemblies/asm-003/bom.json')
+      .set('Cookie', `auth_token=${approvedUserToken}`);
+    expect(res.status).toBe(200);
+    const body = JSON.parse(res.text) as { nodes: unknown[] };
+    expect(body.nodes.length).toBe(6);
+  });
+});

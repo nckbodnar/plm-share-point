@@ -81,11 +81,11 @@
   Last updated in PLM: <%= new Date(assembly.updatedAt).toLocaleString() %>
 </div>
 
-<!-- ReactFlow via CDN (UMD build) -->
-<script src="https://unpkg.com/@xyflow/react@12/dist/umd/index.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/@xyflow/react@12/dist/style.css" />
+<!-- React + ReactFlow via CDN (UMD build) – React MUST load before ReactFlow -->
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/reactflow@11/dist/style.css" />
+<script src="https://unpkg.com/reactflow@11/dist/umd/index.js"></script>
 
 <script>
 (function () {
@@ -123,6 +123,10 @@
       })
       .catch(function (err) {
         console.error('BOM load error', err);
+        document.getElementById('bom-flow').innerHTML =
+          '<div class="text-center text-muted py-5 p-4">' +
+          '<i class="bi bi-exclamation-triangle-fill text-warning fs-1 d-block mb-3"></i>' +
+          'Could not load BOM data. Please refresh the page.</div>';
       });
   }
 
@@ -131,11 +135,17 @@
   // ---------------------------------------------------------------------------
   function renderFlow(nodes, edges) {
     const container = document.getElementById('bom-flow');
-    const { ReactFlow, Background, Controls, MiniMap } = window.ReactFlow || {};
-    if (!ReactFlow) {
-      container.innerHTML = '<div class="text-center text-muted py-5">ReactFlow could not be loaded.</div>';
+
+    // reactflow@11 UMD exposes window.ReactFlow as the module
+    const RF = window.ReactFlow;
+    if (!RF) {
+      container.innerHTML =
+        '<div class="text-center text-muted py-5">ReactFlow could not be loaded. Please check your network connection.</div>';
       return;
     }
+    // In reactflow@11 the main component is RF.ReactFlow (same name as module namespace)
+    const ReactFlowComp = RF.ReactFlow;
+    const { Background, Controls, MiniMap } = RF;
 
     const e = React.createElement;
 
@@ -144,8 +154,8 @@
       const isRoot = n.data.isRoot;
       return Object.assign({}, n, {
         style: {
-          background: isRoot ? '#0d6efd' : '#fff',
-          color: isRoot ? '#fff' : '#212529',
+          background: isRoot ? '#0d6efd' : '#ffffff',
+          color: isRoot ? '#ffffff' : '#212529',
           border: isRoot ? '2px solid #0a58ca' : '2px solid #adb5bd',
           borderRadius: '8px',
           padding: '8px 14px',
@@ -159,12 +169,16 @@
     });
 
     const styledEdges = edges.map(function (ed) {
-      return Object.assign({}, ed, { style: { stroke: '#6c757d' }, labelStyle: { fontSize: '11px' } });
+      return Object.assign({}, ed, {
+        style: { stroke: '#6c757d' },
+        labelStyle: { fontSize: '11px' },
+        type: 'smoothstep',
+      });
     });
 
     function FlowApp() {
-      const [nds, setNds] = React.useState(styledNodes);
-      const [eds, setEds] = React.useState(styledEdges);
+      const [nds] = React.useState(styledNodes);
+      const [eds] = React.useState(styledEdges);
 
       function onNodeClick(_evt, node) {
         if (!node.data.isRoot && node.data.partId) {
@@ -175,12 +189,13 @@
       return e(
         'div',
         { style: { width: '100%', height: '480px' } },
-        e(ReactFlow, {
+        e(ReactFlowComp, {
           nodes: nds,
           edges: eds,
           onNodeClick: onNodeClick,
           fitView: true,
           attributionPosition: 'bottom-right',
+          proOptions: { hideAttribution: false },
         },
           e(Background, { gap: 20, color: '#dee2e6' }),
           e(Controls),
@@ -189,9 +204,14 @@
       );
     }
 
-    const root = ReactDOM.createRoot ? ReactDOM.createRoot(container) : null;
-    if (root) {
-      root.render(e(FlowApp));
+    if (ReactDOM.createRoot) {
+      // React 18
+      // Unmount any previous root first to allow re-render on revision switch
+      if (container._rfRoot) {
+        container._rfRoot.unmount();
+      }
+      container._rfRoot = ReactDOM.createRoot(container);
+      container._rfRoot.render(e(FlowApp));
     } else {
       ReactDOM.render(e(FlowApp), container);
     }
@@ -209,7 +229,9 @@
     tbody.innerHTML = rows.map(function (n) {
       const d = n.data;
       const docLink = d.documentId
-        ? '<a href="/parts/' + d.partId + '/documents/' + d.documentId + '" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener noreferrer"><i class="bi bi-file-earmark-text"></i></a>'
+        ? '<a href="/parts/' + d.partId + '/documents/' + d.documentId +
+          '" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener noreferrer">' +
+          '<i class="bi bi-file-earmark-pdf"></i></a>'
         : '';
       const badge = '<span class="badge bg-success">' + (d.lifecycleState || '') + '</span>';
       return '<tr>' +
