@@ -1,0 +1,54 @@
+/* PLM SharePoint – custom styles */
+
+body {
+  background-color: #f8f9fa;
+}
+
+.navbar-brand {
+  letter-spacing: 0.02em;
+}
+
+/* Part cards */
+.part-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.part-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Lifecycle state badges */
+.lifecycle-badge {
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+}
+
+/* Inline document viewer (iframe) */
+.doc-viewer {
+  min-height: 520px;
+  background: #fff;
+}
+
+.doc-viewer iframe {
+  border: none;
+  width: 100%;
+  height: 100%;
+}
+
+/* Prevent text selection on sensitive areas */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Audit log table */
+.table-sm td,
+.table-sm th {
+  vertical-align: middle;
+}
+
+/* Footer */
+.footer {
+  font-size: 0.82rem;
+}

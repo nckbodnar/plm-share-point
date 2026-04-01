@@ -1,0 +1,54 @@
+<%- include('../partials/header', { title, user }) %>
+
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <h2 class="h5 mb-4"><i class="bi bi-key me-2 text-primary"></i>Change Password</h2>
+
+        <% if (success) { %>
+          <div class="alert alert-success d-flex align-items-start gap-2">
+            <i class="bi bi-check-circle-fill mt-1 flex-shrink-0"></i>
+            <span>Password changed successfully.</span>
+          </div>
+        <% } %>
+
+        <% if (error) { %>
+          <div class="alert alert-danger d-flex align-items-start gap-2">
+            <i class="bi bi-exclamation-triangle-fill mt-1 flex-shrink-0"></i>
+            <span><%= error %></span>
+          </div>
+        <% } %>
+
+        <form method="POST" action="/admin/profile" novalidate>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <div class="mb-3">
+            <label for="currentPassword" class="form-label">Current password</label>
+            <input type="password" class="form-control" id="currentPassword" name="currentPassword"
+                   autocomplete="current-password" required />
+          </div>
+          <div class="mb-3">
+            <label for="newPassword" class="form-label">New password</label>
+            <input type="password" class="form-control" id="newPassword" name="newPassword"
+                   autocomplete="new-password" minlength="8" required />
+            <div class="form-text">At least 8 characters.</div>
+          </div>
+          <div class="mb-4">
+            <label for="confirmPassword" class="form-label">Confirm new password</label>
+            <input type="password" class="form-control" id="confirmPassword" name="confirmPassword"
+                   autocomplete="new-password" required />
+          </div>
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary">Update Password</button>
+          </div>
+        </form>
+
+        <div class="mt-3 text-center">
+          <a href="/admin/dashboard" class="btn btn-link btn-sm">Back to dashboard</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>
