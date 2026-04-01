@@ -1,0 +1,76 @@
+<%- include('../partials/header', { title, user }) %>
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h1 class="h3 mb-1"><i class="bi bi-diagram-3 me-2 text-primary"></i>Assemblies</h1>
+    <p class="text-muted mb-0 small">
+      Showing only <span class="badge bg-success">Released</span> assemblies with BOM visualisation.
+    </p>
+  </div>
+  <form method="GET" action="/assemblies" class="d-flex gap-2" role="search">
+    <input type="search" class="form-control form-control-sm" name="q" placeholder="Search assemblies…"
+           value="<%= search %>" aria-label="Search assemblies" style="min-width:220px;" />
+    <button class="btn btn-outline-secondary btn-sm" type="submit">
+      <i class="bi bi-search"></i>
+    </button>
+    <% if (search) { %>
+      <a href="/assemblies" class="btn btn-outline-danger btn-sm" title="Clear search">
+        <i class="bi bi-x-lg"></i>
+      </a>
+    <% } %>
+  </form>
+</div>
+
+<% if (assemblies.length === 0) { %>
+  <div class="text-center py-5 text-muted">
+    <i class="bi bi-inbox display-3 mb-3 d-block"></i>
+    <p class="lead">
+      <% if (search) { %>
+        No released assemblies matching "<strong><%= search %></strong>".
+      <% } else { %>
+        No released assemblies found.
+      <% } %>
+    </p>
+    <% if (search) { %>
+      <a href="/assemblies" class="btn btn-outline-secondary">Clear search</a>
+    <% } %>
+  </div>
+<% } else { %>
+  <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+    <% assemblies.forEach(function(asm) { %>
+      <div class="col">
+        <div class="card h-100 shadow-sm part-card">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <span class="badge bg-secondary font-monospace"><%= asm.assemblyNumber %></span>
+              <span class="badge bg-success lifecycle-badge">
+                <i class="bi bi-check-circle me-1"></i><%= asm.lifecycleState %>
+              </span>
+            </div>
+            <h5 class="card-title mb-1"><%= asm.name %></h5>
+            <% if (asm.description) { %>
+              <p class="card-text text-muted small mb-2"><%= asm.description %></p>
+            <% } %>
+            <div class="small text-muted">
+              <i class="bi bi-clock-history me-1"></i>
+              Latest rev: <strong><%= asm.latestRevision.revision %></strong>
+              &nbsp;|&nbsp; <i class="bi bi-boxes me-1"></i>
+              <%= asm.latestRevision.components.length %> component<%= asm.latestRevision.components.length !== 1 ? 's' : '' %>
+            </div>
+          </div>
+          <div class="card-footer bg-transparent border-top-0">
+            <a href="/assemblies/<%= asm.id %>" class="btn btn-primary btn-sm w-100">
+              <i class="bi bi-diagram-3 me-1"></i>View BOM
+            </a>
+          </div>
+        </div>
+      </div>
+    <% }); %>
+  </div>
+
+  <p class="text-muted small mt-4 text-end">
+    <i class="bi bi-info-circle me-1"></i>Showing <%= assemblies.length %> released assembl<%= assemblies.length !== 1 ? 'ies' : 'y' %>.
+  </p>
+<% } %>
+
+<%- include('../partials/footer') %>

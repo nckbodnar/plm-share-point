@@ -707,6 +707,56 @@ const MOCK_DOCUMENT_CONTENT = `This is a placeholder specification document.
 In a real deployment this file would be streamed from the PLM server.
 Part specification data is intentionally not downloadable in bulk.`;
 
+const MOCK_ASSEMBLIES: Assembly[] = [
+  {
+    id: 'asm-001',
+    assemblyNumber: 'ASM-20001',
+    name: 'Standard Implant Kit',
+    description: 'Complete kit for standard implant placement including scanning body, abutment screw and impression coping.',
+    lifecycleState: 'Released',
+    latestRevision: {
+      revision: 'B',
+      releaseDate: '2024-03-20',
+      releasedBy: 'Morten Falk Reventlow',
+      lifecycleState: 'Released',
+      components: [
+        { part: { ...MOCK_PARTS[0]! }, quantity: 1, referenceDesignator: 'SB1' },
+        { part: { ...MOCK_PARTS[3]! }, quantity: 2, referenceDesignator: 'SC1' },
+        { part: { ...MOCK_PARTS[4]! }, quantity: 1, referenceDesignator: 'IC1' },
+      ],
+    },
+    previousRevision: {
+      revision: 'A',
+      releaseDate: '2023-10-01',
+      releasedBy: 'Morten Falk Reventlow',
+      lifecycleState: 'Released',
+      components: [
+        { part: { ...MOCK_PARTS[0]! }, quantity: 1 },
+        { part: { ...MOCK_PARTS[3]! }, quantity: 2 },
+      ],
+    },
+    updatedAt: '2024-03-20T09:00:00Z',
+  },
+  {
+    id: 'asm-002',
+    assemblyNumber: 'ASM-20002',
+    name: 'Zirconia Restoration Set',
+    description: 'Milling blank and calibration block for zirconia crown workflow.',
+    lifecycleState: 'Released',
+    latestRevision: {
+      revision: 'A',
+      releaseDate: '2024-02-10',
+      releasedBy: 'Morten Falk Reventlow',
+      lifecycleState: 'Released',
+      components: [
+        { part: { ...MOCK_PARTS[1]! }, quantity: 3, referenceDesignator: 'ZB1' },
+        { part: { ...MOCK_PARTS[2]! }, quantity: 1, referenceDesignator: 'CB1' },
+      ],
+    },
+    updatedAt: '2024-02-10T12:00:00Z',
+  },
+];
+
 export class MockPlmService implements IPlmService {
   async getReleasedParts(): Promise<Part[]> {
     // Return copies so callers cannot mutate the source data
@@ -743,6 +793,20 @@ export class MockPlmService implements IPlmService {
       contentType: 'text/plain; charset=utf-8',
       fileName: `${documentId}-specification.txt`,
     };
+  }
+
+  async getAssemblies(): Promise<Assembly[]> {
+    return MOCK_ASSEMBLIES.map((a) => ({ ...a }));
+  }
+
+  async getAssemblyById(id: string): Promise<Assembly> {
+    const asm = MOCK_ASSEMBLIES.find((a) => a.id === id);
+    if (!asm) {
+      const error = new Error(`Assembly "${id}" not found or not Released.`);
+      (error as NodeJS.ErrnoException).code = 'NOT_FOUND';
+      throw error;
+    }
+    return { ...asm };
   }
 }
 

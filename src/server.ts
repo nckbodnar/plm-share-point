@@ -10,6 +10,7 @@ import { optionalAuth } from './middleware/auth';
 import authRouter from './routes/auth';
 import partsRouter from './routes/parts';
 import adminRouter from './routes/admin';
+import assembliesRouter from './routes/assemblies';
 import { getDb } from './db'; // ensure DB is initialised on startup
 
 const app = express();
@@ -22,11 +23,11 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
-        styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
-        fontSrc: ["'self'", 'cdn.jsdelivr.net', 'data:'],
+        scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'unpkg.com'],
+        styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'unpkg.com'],
+        fontSrc: ["'self'", 'cdn.jsdelivr.net', 'unpkg.com', 'data:'],
         imgSrc: ["'self'", 'data:'],
-        connectSrc: ["'self'", 'cdn.jsdelivr.net'],
+        connectSrc: ["'self'", 'cdn.jsdelivr.net', 'unpkg.com'],
         frameSrc: ["'self'"],        // allow inline PDF viewer (same origin)
         objectSrc: ["'none'"],
       },
@@ -111,6 +112,7 @@ app.use(optionalAuth);
 // ---------------------------------------------------------------------------
 app.use('/', authRouter);
 app.use('/parts', partsRouter);
+app.use('/assemblies', assembliesRouter);
 app.use('/admin', adminRouter);
 
 // Home → redirect to parts list (or login if not authenticated)
