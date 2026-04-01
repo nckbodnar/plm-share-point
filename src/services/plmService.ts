@@ -14,7 +14,7 @@
 import crypto from 'node:crypto';
 import axios, { AxiosInstance } from 'axios';
 import { config } from '../config';
-import type { Part, PartRevision, LifecycleState } from '../types';
+import type { Part, PartRevision, LifecycleState, Assembly } from '../types';
 
 // ---------------------------------------------------------------------------
 // Interface
@@ -38,6 +38,17 @@ export interface IPlmService {
    * The caller is responsible for setting the correct Content-Type header.
    */
   getDocumentContent(documentId: string): Promise<{ data: Buffer; contentType: string; fileName: string }>;
+
+  /**
+   * Return all assemblies whose current lifecycle state is "Released".
+   */
+  getAssemblies(): Promise<Assembly[]>;
+
+  /**
+   * Return a single released assembly by its PLM ID.
+   * Throws if the assembly does not exist or is not Released.
+   */
+  getAssemblyById(id: string): Promise<Assembly>;
 }
 
 // ---------------------------------------------------------------------------
@@ -433,6 +444,17 @@ export class ArasPlmService implements IPlmService {
 
     return { data: Buffer.from(res.data), contentType, fileName };
   }
+
+  async getAssemblies(): Promise<Assembly[]> {
+    // TODO: implement Aras AML query for Part BOM structures
+    return [];
+  }
+
+  async getAssemblyById(_id: string): Promise<Assembly> {
+    const error = new Error('Assembly retrieval not yet implemented for Aras.');
+    (error as NodeJS.ErrnoException).code = 'NOT_FOUND';
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -497,6 +519,17 @@ export class RealPlmService implements IPlmService {
     const fileNameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
     const fileName = fileNameMatch ? fileNameMatch[1].replace(/['"]/g, '') : `document-${documentId}`;
     return { data: Buffer.from(res.data), contentType, fileName };
+  }
+
+  async getAssemblies(): Promise<Assembly[]> {
+    // TODO: implement generic REST assembly endpoint
+    return [];
+  }
+
+  async getAssemblyById(_id: string): Promise<Assembly> {
+    const error = new Error('Assembly retrieval not yet implemented for generic REST.');
+    (error as NodeJS.ErrnoException).code = 'NOT_FOUND';
+    throw error;
   }
 }
 

@@ -77,6 +77,50 @@ export interface JwtPayload {
   isAdmin: boolean;
 }
 
+/** A component (child part) within an assembly BOM */
+export interface AssemblyComponent {
+  /** Reference to the child part */
+  part: Part;
+  /** Quantity of this part in the assembly */
+  quantity: number;
+  /** Optional reference designator (e.g. "R1", "C2") */
+  referenceDesignator?: string;
+}
+
+/** A single revision of an assembly */
+export interface AssemblyRevision {
+  /** Revision identifier, e.g. "A", "B", "01" */
+  revision: string;
+  /** ISO-8601 date when this revision was released */
+  releaseDate: string;
+  /** Name of the person who released this revision */
+  releasedBy?: string;
+  /** Lifecycle state of this specific revision */
+  lifecycleState: LifecycleState;
+  /** Components (child parts) in this revision of the assembly */
+  components: AssemblyComponent[];
+}
+
+/** An assembly record – a collection of parts forming a product */
+export interface Assembly {
+  /** Unique identifier in the PLM system */
+  id: string;
+  /** Assembly number (e.g. "ASM-20001") */
+  assemblyNumber: string;
+  /** Display name */
+  name: string;
+  /** Optional free-text description */
+  description?: string;
+  /** Current lifecycle state */
+  lifecycleState: LifecycleState;
+  /** Latest released revision */
+  latestRevision: AssemblyRevision;
+  /** Previous released revision, if one exists */
+  previousRevision?: AssemblyRevision;
+  /** ISO-8601 date of last update in PLM */
+  updatedAt: string;
+}
+
 /** Audit-log entry for tracking who viewed which part */
 export interface AuditEntry {
   id: number;
@@ -85,6 +129,6 @@ export interface AuditEntry {
   partId: string;
   partNumber: string;
   revision: string;
-  action: 'view_part' | 'view_document';
+  action: 'view_part' | 'view_document' | 'view_assembly';
   accessedAt: string;
 }
