@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireAdmin } from '../middleware/auth';
 import { getPlmService } from '../services/plmService';
 import { logAccess } from '../db';
 
@@ -167,6 +167,69 @@ router.get('/:id/documents/:docId', docLimiter, async (req, res) => {
       message: 'Could not retrieve the document. Please try again later.',
       user: req.user,
     });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PUT /parts – add a new part to the mock data store (admin-only, JSON API)
+// ---------------------------------------------------------------------------
+
+const PART_TOP_LEVEL_FIELDS = ['id', 'partNumber', 'name', 'lifecycleState', 'latestRevision', 'updatedAt'] as const;
+const LATEST_REVISION_FIELDS = ['revision', 'releaseDate', 'lifecycleState'] as const;
+
+router.put('/', requireAdmin, async (req, res) => {
+  const body = req.body as Record<string, unknown>;
+
+  // Validate top-level required fields
+  const missing: string[] = PART_TOP_LEVEL_FIELDS.filter((f) => !body[f]);
+  if (missing.length > 0) {
+    res.status(400).json({ error: 'Missing required fields.', missing });
+    return;
+  }
+
+  // Validate latestRevision sub-object
+  const latestRevision = body['latestRevision'] as Record<string, unknown>;
+  const missingRevFields = LATEST_REVISION_FIELDS.filter((f) => !latestRevision[f]);
+  if (missingRevFields.length > 0) {
+    res.status(400).json({
+      error: 'Missing required fields in latestRevision.',
+      missing: missingRevFields.map((f) => `latestRevision.${f}`),
+    });
+    return;
+  }
+
+  const part: import('../types').Part = {
+    id: String(body['id']),
+    partNumber: String(body['partNumber']),
+    name: String(body['name']),
+    description: body['description'] != null ? String(body['description']) : undefined,
+    lifecycleState: body['lifecycleState'] as import('../types').LifecycleState,
+    latestRevision: {
+      revision: String(latestRevision['revision']),
+      releaseDate: String(latestRevision['releaseDate']),
+      releasedBy: latestRevision['releasedBy'] != null ? String(latestRevision['releasedBy']) : undefined,
+      lifecycleState: latestRevision['lifecycleState'] as import('../types').LifecycleState,
+      documentId: latestRevision['documentId'] != null ? String(latestRevision['documentId']) : undefined,
+      specificationFileName: latestRevision['specificationFileName'] != null ? String(latestRevision['specificationFileName']) : undefined,
+    },
+    updatedAt: String(body['updatedAt']),
+  };
+
+  try {
+    const created = await getPlmService().addPart(part);
+    res.status(201).json({ part: created });
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'CONFLICT') {
+      res.status(409).json({ error: (err as Error).message });
+      return;
+    }
+    if (code === 'NOT_SUPPORTED') {
+      res.status(501).json({ error: 'addPart is not supported by the active PLM adapter.' });
+      return;
+    }
+    console.error('[parts] Error adding part:', err);
+    res.status(500).json({ error: 'Could not add part.' });
   }
 });
 

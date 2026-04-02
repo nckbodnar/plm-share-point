@@ -49,6 +49,13 @@ export interface IPlmService {
    * Throws if the assembly does not exist or is not Released.
    */
   getAssemblyById(id: string): Promise<Assembly>;
+
+  /**
+   * Add a new part to the data store and return the created part.
+   * Throws with code CONFLICT if a part with the same id or partNumber already exists.
+   * Only supported by MockPlmService; other adapters throw NOT_SUPPORTED.
+   */
+  addPart(part: Part): Promise<Part>;
 }
 
 // ---------------------------------------------------------------------------
@@ -455,6 +462,12 @@ export class ArasPlmService implements IPlmService {
     (error as NodeJS.ErrnoException).code = 'NOT_FOUND';
     throw error;
   }
+
+  async addPart(_part: Part): Promise<Part> {
+    const error = new Error('addPart is not supported by ArasPlmService.');
+    (error as NodeJS.ErrnoException).code = 'NOT_SUPPORTED';
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -529,6 +542,12 @@ export class RealPlmService implements IPlmService {
   async getAssemblyById(_id: string): Promise<Assembly> {
     const error = new Error('Assembly retrieval not yet implemented for generic REST.');
     (error as NodeJS.ErrnoException).code = 'NOT_FOUND';
+    throw error;
+  }
+
+  async addPart(_part: Part): Promise<Part> {
+    const error = new Error('addPart is not supported by RealPlmService.');
+    (error as NodeJS.ErrnoException).code = 'NOT_SUPPORTED';
     throw error;
   }
 }
@@ -960,6 +979,19 @@ export class MockPlmService implements IPlmService {
       throw error;
     }
     return { ...asm };
+  }
+
+  async addPart(part: Part): Promise<Part> {
+    const duplicate = MOCK_PARTS.find((p) => p.id === part.id || p.partNumber === part.partNumber);
+    if (duplicate) {
+      const error = new Error(
+        `A part with id "${part.id}" or partNumber "${part.partNumber}" already exists.`,
+      );
+      (error as NodeJS.ErrnoException).code = 'CONFLICT';
+      throw error;
+    }
+    MOCK_PARTS.push({ ...part });
+    return { ...part };
   }
 }
 
