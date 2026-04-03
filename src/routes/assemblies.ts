@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { requireAuth } from '../middleware/auth';
-import { getPlmService } from '../services/plmService';
-import { logAccess } from '../db';
+import { requireAuth, requireAdmin } from '../middleware/auth';
+import {
+  listAssemblies, getDrawing, getAssemblyComponents,
+  addComponentToAssembly, removeComponentFromAssembly,
+  listDrawings, createDrawing, logAccess,
+} from '../pgDb';
 
 const router = Router();
 
@@ -16,138 +19,156 @@ const viewLimiter = rateLimit({
 
 router.use(requireAuth);
 
-// GET /assemblies – list all released assemblies
 router.get('/', viewLimiter, async (req, res) => {
   try {
-    const assemblies = await getPlmService().getAssemblies();
     const search = typeof req.query['q'] === 'string' ? req.query['q'].toLowerCase() : '';
-
-    const filtered = search
-      ? assemblies.filter(
-          (a) =>
-            a.assemblyNumber.toLowerCase().includes(search) ||
-            a.name.toLowerCase().includes(search) ||
-            (a.description ?? '').toLowerCase().includes(search),
-        )
-      : assemblies;
-
-    res.render('assemblies/index', {
-      title: 'Assemblies',
-      assemblies: filtered,
-      search,
-      user: req.user,
-    });
+    let assemblies = await listAssemblies();
+    if (search) {
+      assemblies = assemblies.filter(
+        (a) => a.name.toLowerCase().includes(search) || (a.description ?? '').toLowerCase().includes(search),
+      );
+    }
+    res.render('assemblies/index', { title: 'Assemblies', assemblies, search, user: req.user });
   } catch (err) {
-    console.error('[assemblies] Error fetching assemblies:', err);
-    res.status(500).render('error', {
-      title: 'Error',
-      message: 'Could not retrieve assemblies from the PLM system.',
-      user: req.user,
-    });
+    console.error('[assemblies] GET / error:', err);
+    res.status(500).render('error', { title: 'Error', message: 'Could not retrieve assemblies.', user: req.user });
   }
 });
 
-// GET /assemblies/:id – BOM tree view for a single assembly
+router.get('/new', requireAdmin, async (req, res) => {
+  try {
+    const allDrawings = await listDrawings();
+    res.render('assemblies/new', { title: 'New Assembly', user: req.user, allDrawings, error: null });
+  } catch (err) {
+    res.status(500).render('error', { title: 'Error', message: 'Failed to load form.', user: req.user });
+  }
+});
+
+router.post('/', requireAdmin, async (req, res) => {
+  try {
+    const { name, description, revision } = req.body as Record<string, string>;
+    if (!name?.trim()) {
+      const allDrawings = await listDrawings();
+      res.status(400).render('assemblies/new', { title: 'New Assembly', user: req.user, allDrawings, error: 'Name is required.' });
+      return;
+    }
+    const drawing = await createDrawing({ name: name.trim(), description: description?.trim(), revision: revision?.trim() || 'A' });
+    res.redirect(`/assemblies/${drawing.id}`);
+  } catch (err) {
+    console.error('[assemblies] POST / error:', err);
+    res.status(500).render('error', { title: 'Error', message: 'Failed to create assembly.', user: req.user });
+  }
+});
+
 router.get('/:id', viewLimiter, async (req, res) => {
   try {
-    const assembly = await getPlmService().getAssemblyById(String(req.params['id']));
+    const assembly = await getDrawing((req.params['id'] as string));
+    if (!assembly) {
+      res.status(404).render('error', { title: 'Not Found', message: 'Assembly not found.', user: req.user });
+      return;
+    }
 
-    logAccess({
+    const components = await getAssemblyComponents(assembly.id);
+    const allDrawings = req.user!.isAdmin ? await listDrawings() : [];
+
+    await logAccess({
       userId: req.user!.userId,
       userEmail: req.user!.email,
       partId: assembly.id,
-      partNumber: assembly.assemblyNumber,
-      revision: assembly.latestRevision.revision,
+      partNumber: assembly.name,
+      revision: assembly.revision,
       action: 'view_assembly',
       accessedAt: new Date().toISOString(),
     });
 
     res.render('assemblies/detail', {
-      title: `${assembly.assemblyNumber} – ${assembly.name}`,
+      title: `Assembly: ${assembly.name}`,
       assembly,
+      components,
+      allDrawings,
       user: req.user,
     });
-  } catch (err: unknown) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === 'NOT_FOUND') {
-      res.status(404).render('error', {
-        title: 'Not Found',
-        message: 'The requested assembly was not found or is not in a Released state.',
-        user: req.user,
-      });
-      return;
-    }
-    console.error('[assemblies] Error fetching assembly detail:', err);
-    res.status(500).render('error', {
-      title: 'Error',
-      message: 'Could not retrieve assembly data from the PLM system.',
-      user: req.user,
-    });
+  } catch (err) {
+    console.error('[assemblies] GET /:id error:', err);
+    res.status(500).render('error', { title: 'Error', message: 'Could not retrieve assembly.', user: req.user });
   }
 });
 
-// GET /assemblies/:id/bom.json – JSON BOM data for ReactFlow
+router.post('/:id/components', requireAdmin, async (req, res) => {
+  try {
+    const { childId, quantity, referenceDesignator } = req.body as Record<string, string>;
+    if (!childId) { res.redirect(`/assemblies/${req.params['id']}`); return; }
+    await addComponentToAssembly(
+      (req.params['id'] as string),
+      childId,
+      parseInt(quantity || '1', 10),
+      referenceDesignator?.trim() || undefined,
+    );
+    res.redirect(`/assemblies/${req.params['id']}`);
+  } catch (err) {
+    console.error('[assemblies] POST /:id/components error:', err);
+    res.status(500).json({ error: 'Failed to add component.' });
+  }
+});
+
+router.delete('/:id/components/:childId', requireAdmin, async (req, res) => {
+  try {
+    await removeComponentFromAssembly((req.params['id'] as string), (req.params['childId'] as string));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to remove component.' });
+  }
+});
+
+router.post('/:id/components/:childId/delete', requireAdmin, async (req, res) => {
+  await removeComponentFromAssembly((req.params['id'] as string), (req.params['childId'] as string));
+  res.redirect(`/assemblies/${req.params['id']}`);
+});
+
 router.get('/:id/bom.json', viewLimiter, async (req, res) => {
   try {
-    const assembly = await getPlmService().getAssemblyById(String(req.params['id']));
+    const assembly = await getDrawing((req.params['id'] as string));
+    if (!assembly) { res.status(404).json({ error: 'Assembly not found.' }); return; }
+    const components = await getAssemblyComponents(assembly.id);
 
-    const revisionParam = typeof req.query['rev'] === 'string' ? req.query['rev'] : null;
-    const revision =
-      revisionParam && assembly.previousRevision?.revision === revisionParam
-        ? assembly.previousRevision
-        : assembly.latestRevision;
-
-    // Build ReactFlow nodes + edges
     const nodes = [
       {
         id: 'root',
         type: 'default',
         position: { x: 400, y: 20 },
         data: {
-          label: `${assembly.assemblyNumber}\n${assembly.name}\nRev ${revision.revision}`,
-          assemblyNumber: assembly.assemblyNumber,
+          label: `${assembly.name}\nRev ${assembly.revision}`,
           name: assembly.name,
-          revision: revision.revision,
-          lifecycleState: assembly.lifecycleState,
+          revision: assembly.revision,
           isRoot: true,
         },
       },
-      ...revision.components.map((c, i) => ({
-        id: `part-${c.part.id}`,
+      ...components.map((c, i) => ({
+        id: `part-${c.id}`,
         type: 'default',
         position: { x: i * 220, y: 160 },
         data: {
-          label: `${c.part.partNumber}\n${c.part.name}\nRev ${c.part.latestRevision.revision}`,
-          partNumber: c.part.partNumber,
-          name: c.part.name,
-          partId: c.part.id,
-          revision: c.part.latestRevision.revision,
-          lifecycleState: c.part.lifecycleState,
+          label: `${c.name}\nRev ${c.revision}`,
+          name: c.name,
+          partId: c.id,
+          revision: c.revision,
           quantity: c.quantity,
           referenceDesignator: c.referenceDesignator,
-          documentId: c.part.latestRevision.documentId,
           isRoot: false,
         },
       })),
     ];
 
-    const edges = revision.components.map((c) => ({
-      id: `e-root-${c.part.id}`,
+    const edges = components.map((c) => ({
+      id: `e-root-${c.id}`,
       source: 'root',
-      target: `part-${c.part.id}`,
-      label: c.referenceDesignator
-        ? `${c.referenceDesignator} × ${c.quantity}`
-        : `× ${c.quantity}`,
+      target: `part-${c.id}`,
+      label: c.referenceDesignator ? `${c.referenceDesignator} × ${c.quantity}` : `× ${c.quantity}`,
     }));
 
     res.json({ nodes, edges });
-  } catch (err: unknown) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === 'NOT_FOUND') {
-      res.status(404).json({ error: 'Assembly not found.' });
-      return;
-    }
-    console.error('[assemblies] Error building BOM JSON:', err);
+  } catch (err) {
+    console.error('[assemblies] GET /:id/bom.json error:', err);
     res.status(500).json({ error: 'Could not build BOM data.' });
   }
 });

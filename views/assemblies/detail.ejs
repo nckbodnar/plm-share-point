@@ -3,21 +3,21 @@
 <nav aria-label="breadcrumb" class="mb-3">
   <ol class="breadcrumb">
     <li class="breadcrumb-item"><a href="/assemblies">Assemblies</a></li>
-    <li class="breadcrumb-item active" aria-current="page"><%= assembly.assemblyNumber %></li>
+    <li class="breadcrumb-item active" aria-current="page"><%= assembly.name %></li>
   </ol>
 </nav>
 
 <div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
   <div>
     <h1 class="h3 mb-1">
-      <span class="font-monospace text-secondary me-2"><%= assembly.assemblyNumber %></span>
+      <span class="badge bg-secondary font-monospace me-2">Rev <%= assembly.revision %></span>
       <%= assembly.name %>
     </h1>
     <% if (assembly.description) { %>
       <p class="text-muted mb-2"><%= assembly.description %></p>
     <% } %>
-    <span class="badge bg-success fs-6">
-      <i class="bi bi-check-circle me-1"></i><%= assembly.lifecycleState %>
+    <span class="badge bg-primary fs-6">
+      <i class="bi bi-diagram-3 me-1"></i>Assembly
     </span>
   </div>
   <a href="/assemblies" class="btn btn-outline-secondary btn-sm align-self-start">
@@ -25,28 +25,12 @@
   </a>
 </div>
 
-<!-- Revision selector -->
-<div class="mb-3 d-flex align-items-center gap-3 flex-wrap">
-  <strong class="text-muted small">Revision:</strong>
-  <div class="btn-group btn-group-sm" role="group" aria-label="Select revision">
-    <button type="button" class="btn btn-success rev-btn active" data-rev="<%= assembly.latestRevision.revision %>">
-      <i class="bi bi-star-fill me-1"></i>Rev <%= assembly.latestRevision.revision %> (Current)
-    </button>
-    <% if (assembly.previousRevision) { %>
-    <button type="button" class="btn btn-outline-secondary rev-btn" data-rev="<%= assembly.previousRevision.revision %>">
-      <i class="bi bi-clock-history me-1"></i>Rev <%= assembly.previousRevision.revision %> (Previous)
-    </button>
-    <% } %>
-  </div>
-  <span id="rev-label" class="badge bg-secondary"></span>
-</div>
-
 <!-- BOM visualisation -->
 <div class="card shadow-sm mb-4">
   <div class="card-header d-flex align-items-center gap-2">
     <i class="bi bi-diagram-3 text-primary"></i>
     <strong>Bill of Materials – Interactive Tree</strong>
-    <span class="ms-auto text-muted small">Scroll to zoom · Drag to pan · Click part to view spec</span>
+    <span class="ms-auto text-muted small">Scroll to zoom · Drag to pan</span>
   </div>
   <div class="card-body p-0">
     <div id="bom-flow" style="width:100%;height:480px;"></div>
@@ -54,34 +38,97 @@
 </div>
 
 <!-- Components table -->
-<div class="card shadow-sm mb-4" id="components-table-card">
-  <div class="card-header"><i class="bi bi-table me-2"></i><strong id="components-table-title">Components</strong></div>
+<div class="card shadow-sm mb-4">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-table me-2"></i><strong>Components (<%= components.length %>)</strong></span>
+    <% if (user && user.isAdmin) { %>
+    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#add-component-form">
+      <i class="bi bi-plus-lg me-1"></i>Add Component
+    </button>
+    <% } %>
+  </div>
+
+  <% if (user && user.isAdmin) { %>
+  <div class="collapse" id="add-component-form">
+    <div class="card-body border-bottom">
+      <form method="POST" action="/assemblies/<%= assembly.id %>/components" class="row g-2 align-items-end">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <div class="col-md-5">
+          <label class="form-label small">Child Drawing</label>
+          <select name="childId" class="form-select form-select-sm" required>
+            <option value="">Select drawing…</option>
+            <% allDrawings.forEach(function(d) { %>
+              <% if (d.id !== assembly.id) { %>
+                <option value="<%= d.id %>"><%= d.name %> (Rev <%= d.revision %>)</option>
+              <% } %>
+            <% }); %>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Quantity</label>
+          <input type="number" name="quantity" class="form-control form-control-sm" value="1" min="1" />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">Reference Designator</label>
+          <input type="text" name="referenceDesignator" class="form-control form-control-sm" placeholder="e.g. R1" />
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary btn-sm w-100">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <% } %>
+
   <div class="card-body p-0">
+    <% if (components.length === 0) { %>
+      <div class="text-center py-4 text-muted">
+        <i class="bi bi-inbox me-2"></i>No components yet.
+      </div>
+    <% } else { %>
     <div class="table-responsive">
       <table class="table table-hover table-sm mb-0">
         <thead class="table-light">
           <tr>
             <th>Ref</th>
-            <th>Part Number</th>
             <th>Name</th>
             <th>Revision</th>
             <th>Qty</th>
-            <th>State</th>
             <th></th>
           </tr>
         </thead>
-        <tbody id="components-tbody"></tbody>
+        <tbody>
+          <% components.forEach(function(c) { %>
+          <tr>
+            <td class="font-monospace small"><%= c.referenceDesignator || '–' %></td>
+            <td><a href="/drawings/<%= c.id %>" class="small"><%= c.name %></a></td>
+            <td class="small"><%= c.revision %></td>
+            <td class="small text-center"><%= c.quantity %></td>
+            <td>
+              <% if (user && user.isAdmin) { %>
+              <form method="POST" action="/assemblies/<%= assembly.id %>/components/<%= c.id %>/delete" class="d-inline">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1" title="Remove">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+              <% } %>
+            </td>
+          </tr>
+          <% }); %>
+        </tbody>
       </table>
     </div>
+    <% } %>
   </div>
 </div>
 
 <div class="mt-4 small text-muted">
   <i class="bi bi-clock me-1"></i>
-  Last updated in PLM: <%= new Date(assembly.updatedAt).toLocaleString() %>
+  Created: <%= new Date(assembly.createdAt).toLocaleString() %>
 </div>
 
-<!-- React + ReactFlow via CDN (UMD build) – React MUST load before ReactFlow -->
+<!-- React + ReactFlow via CDN -->
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/reactflow@11/dist/style.css" />
@@ -90,66 +137,29 @@
 <script>
 (function () {
   const assemblyId = '<%= assembly.id %>';
-  const latestRev   = '<%= assembly.latestRevision.revision %>';
-  let currentRev    = latestRev;
 
-  // ---------------------------------------------------------------------------
-  // Revision buttons
-  // ---------------------------------------------------------------------------
-  document.querySelectorAll('.rev-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      document.querySelectorAll('.rev-btn').forEach(function (b) {
-        b.classList.remove('active', 'btn-success');
-        b.classList.add('btn-outline-secondary');
-      });
-      btn.classList.remove('btn-outline-secondary');
-      btn.classList.add('active', 'btn-success');
-      currentRev = btn.dataset.rev;
-      loadBom(currentRev);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // BOM loader
-  // ---------------------------------------------------------------------------
-  function loadBom(rev) {
-    const url = '/assemblies/' + assemblyId + '/bom.json' + (rev !== latestRev ? '?rev=' + encodeURIComponent(rev) : '');
-    fetch(url)
+  function loadBom() {
+    fetch('/assemblies/' + assemblyId + '/bom.json')
       .then(function (r) { return r.json(); })
-      .then(function (data) {
-        renderFlow(data.nodes, data.edges);
-        renderTable(data.nodes, rev);
-        document.getElementById('rev-label').textContent = 'Rev ' + rev;
-      })
+      .then(function (data) { renderFlow(data.nodes, data.edges); })
       .catch(function (err) {
         console.error('BOM load error', err);
         document.getElementById('bom-flow').innerHTML =
-          '<div class="text-center text-muted py-5 p-4">' +
-          '<i class="bi bi-exclamation-triangle-fill text-warning fs-1 d-block mb-3"></i>' +
-          'Could not load BOM data. Please refresh the page.</div>';
+          '<div class="text-center text-muted py-5 p-4">Could not load BOM data.</div>';
       });
   }
 
-  // ---------------------------------------------------------------------------
-  // ReactFlow renderer (plain JS, no JSX)
-  // ---------------------------------------------------------------------------
   function renderFlow(nodes, edges) {
     const container = document.getElementById('bom-flow');
-
-    // reactflow@11 UMD exposes window.ReactFlow as the module
     const RF = window.ReactFlow;
     if (!RF) {
-      container.innerHTML =
-        '<div class="text-center text-muted py-5">ReactFlow could not be loaded. Please check your network connection.</div>';
+      container.innerHTML = '<div class="text-center text-muted py-5">ReactFlow could not be loaded.</div>';
       return;
     }
-    // In reactflow@11 the main component is RF.ReactFlow (same name as module namespace)
     const ReactFlowComp = RF.ReactFlow;
     const { Background, Controls, MiniMap } = RF;
-
     const e = React.createElement;
 
-    // Style nodes by type
     const styledNodes = nodes.map(function (n) {
       const isRoot = n.data.isRoot;
       return Object.assign({}, n, {
@@ -182,20 +192,14 @@
 
       function onNodeClick(_evt, node) {
         if (!node.data.isRoot && node.data.partId) {
-          window.location.href = '/parts/' + node.data.partId;
+          window.location.href = '/drawings/' + node.data.partId;
         }
       }
 
-      return e(
-        'div',
-        { style: { width: '100%', height: '480px' } },
+      return e('div', { style: { width: '100%', height: '480px' } },
         e(ReactFlowComp, {
-          nodes: nds,
-          edges: eds,
-          onNodeClick: onNodeClick,
-          fitView: true,
-          attributionPosition: 'bottom-right',
-          proOptions: { hideAttribution: false },
+          nodes: nds, edges: eds, onNodeClick: onNodeClick,
+          fitView: true, attributionPosition: 'bottom-right',
         },
           e(Background, { gap: 20, color: '#dee2e6' }),
           e(Controls),
@@ -205,11 +209,7 @@
     }
 
     if (ReactDOM.createRoot) {
-      // React 18
-      // Unmount any previous root first to allow re-render on revision switch
-      if (container._rfRoot) {
-        container._rfRoot.unmount();
-      }
+      if (container._rfRoot) container._rfRoot.unmount();
       container._rfRoot = ReactDOM.createRoot(container);
       container._rfRoot.render(e(FlowApp));
     } else {
@@ -217,37 +217,7 @@
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Table renderer
-  // ---------------------------------------------------------------------------
-  function renderTable(nodes, rev) {
-    const tbody = document.getElementById('components-tbody');
-    const title = document.getElementById('components-table-title');
-    title.textContent = 'Components – Rev ' + rev;
-
-    const rows = nodes.filter(function (n) { return !n.data.isRoot; });
-    tbody.innerHTML = rows.map(function (n) {
-      const d = n.data;
-      const docLink = d.documentId
-        ? '<a href="/parts/' + d.partId + '/documents/' + d.documentId +
-          '" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener noreferrer">' +
-          '<i class="bi bi-file-earmark-pdf"></i></a>'
-        : '';
-      const badge = '<span class="badge bg-success">' + (d.lifecycleState || '') + '</span>';
-      return '<tr>' +
-        '<td class="font-monospace small">' + (d.referenceDesignator || '–') + '</td>' +
-        '<td><a href="/parts/' + d.partId + '" class="font-monospace small">' + d.partNumber + '</a></td>' +
-        '<td class="small">' + d.name + '</td>' +
-        '<td class="small">' + d.revision + '</td>' +
-        '<td class="small text-center">' + d.quantity + '</td>' +
-        '<td>' + badge + '</td>' +
-        '<td>' + docLink + '</td>' +
-        '</tr>';
-    }).join('');
-  }
-
-  // Initial load
-  loadBom(latestRev);
+  loadBom();
 })();
 </script>
 

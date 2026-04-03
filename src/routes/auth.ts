@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
-import { findUserByEmail, createUser } from '../db';
+import { findUserByEmail, createUser } from '../pgDb';
 import { signToken } from '../middleware/auth';
 
 const router = Router();
@@ -75,7 +75,7 @@ router.post('/login', authLimiter, async (req, res) => {
     return;
   }
 
-  const user = findUserByEmail(email.trim());
+  const user = await findUserByEmail(email.trim());
 
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
     res.render('login', {
@@ -178,14 +178,14 @@ router.post('/request-access', authLimiter, async (req, res) => {
     return;
   }
 
-  const existing = findUserByEmail(email.trim());
+  const existing = await findUserByEmail(email.trim());
   if (existing) {
     renderError('An account with this email address already exists.');
     return;
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
-  createUser({
+  await createUser({
     email: email.trim(),
     name: name.trim(),
     company: company?.trim(),

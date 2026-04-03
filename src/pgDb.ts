@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import { config } from './config';
-import type { Drawing, DrawingMetadata, Project, DbLocation, Group } from './types';
+import type { Drawing, DrawingMetadata, Project, DbLocation, Group, User, AuditEntry } from './types';
 
 let pool: Pool | null = null;
 
@@ -15,6 +15,32 @@ export function getPool(): Pool {
 
 const SCHEMA_SQL = `
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+CREATE TABLE IF NOT EXISTS users (
+  id            SERIAL PRIMARY KEY,
+  email         TEXT UNIQUE NOT NULL,
+  name          TEXT NOT NULL,
+  company       TEXT,
+  password_hash TEXT NOT NULL,
+  is_approved   BOOLEAN NOT NULL DEFAULT false,
+  is_admin      BOOLEAN NOT NULL DEFAULT false,
+  reason        TEXT,
+  requested_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  approved_at   TIMESTAMPTZ,
+  approved_by   TEXT,
+  admin_notes   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id           SERIAL PRIMARY KEY,
+  user_id      INTEGER NOT NULL REFERENCES users(id),
+  user_email   TEXT NOT NULL,
+  part_id      TEXT NOT NULL,
+  part_number  TEXT NOT NULL,
+  revision     TEXT NOT NULL,
+  action       TEXT NOT NULL,
+  accessed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 CREATE TABLE IF NOT EXISTS projects (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -87,11 +113,20 @@ CREATE INDEX IF NOT EXISTS idx_drawings_metadata        ON drawings USING GIN (m
 CREATE INDEX IF NOT EXISTS idx_drawings_name            ON drawings (name);
 CREATE INDEX IF NOT EXISTS idx_drawing_projects_drawing ON drawing_projects (drawing_id);
 CREATE INDEX IF NOT EXISTS idx_drawing_projects_project ON drawing_projects (project_id);
+
+CREATE TABLE IF NOT EXISTS assembly_components (
+  parent_id            UUID NOT NULL REFERENCES drawings(id) ON DELETE CASCADE,
+  child_id             UUID NOT NULL REFERENCES drawings(id) ON DELETE CASCADE,
+  quantity             INTEGER NOT NULL DEFAULT 1,
+  reference_designator TEXT,
+  PRIMARY KEY (parent_id, child_id)
+);
 `;
 
 export async function initPgDb(): Promise<void> {
   const db = getPool();
   await db.query(SCHEMA_SQL);
+  await seedDefaultData();
 }
 
 // ── Row → domain mappers ──────────────────────────────────────────────────────
@@ -580,4 +615,221 @@ export async function listGroupsWithCounts(): Promise<(Group & { memberCount: nu
     memberCount: row['member_count'] as number,
     projectCount: row['project_count'] as number,
   }));
+}
+
+// ── User helpers ──────────────────────────────────────────────────────────────
+
+function rowToUser(row: Record<string, unknown>): User {
+  return {
+    id: row['id'] as number,
+    email: row['email'] as string,
+    name: row['name'] as string,
+    company: (row['company'] as string | null) ?? undefined,
+    passwordHash: row['password_hash'] as string,
+    isApproved: row['is_approved'] as boolean,
+    isAdmin: row['is_admin'] as boolean,
+    reason: (row['reason'] as string | null) ?? undefined,
+    requestedAt: (row['requested_at'] as Date).toISOString(),
+    approvedAt: row['approved_at'] ? (row['approved_at'] as Date).toISOString() : undefined,
+    approvedBy: (row['approved_by'] as string | null) ?? undefined,
+    adminNotes: (row['admin_notes'] as string | null) ?? undefined,
+  };
+}
+
+export async function findUserByEmail(email: string): Promise<User | undefined> {
+  const db = getPool();
+  const { rows } = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+  if (rows.length === 0) return undefined;
+  return rowToUser(rows[0] as Record<string, unknown>);
+}
+
+export async function findUserById(id: number): Promise<User | undefined> {
+  const db = getPool();
+  const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [id]);
+  if (rows.length === 0) return undefined;
+  return rowToUser(rows[0] as Record<string, unknown>);
+}
+
+export async function getAllUsers(): Promise<User[]> {
+  const db = getPool();
+  const { rows } = await db.query('SELECT * FROM users ORDER BY requested_at DESC');
+  return (rows as Record<string, unknown>[]).map(rowToUser);
+}
+
+export async function getPendingUsers(): Promise<User[]> {
+  const db = getPool();
+  const { rows } = await db.query(
+    'SELECT * FROM users WHERE is_approved = false AND is_admin = false ORDER BY requested_at DESC',
+  );
+  return (rows as Record<string, unknown>[]).map(rowToUser);
+}
+
+export async function createUser(params: {
+  email: string;
+  name: string;
+  company?: string;
+  passwordHash: string;
+  reason?: string;
+}): Promise<User> {
+  const db = getPool();
+  const { rows } = await db.query(
+    `INSERT INTO users (email, name, company, password_hash, reason)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [params.email, params.name, params.company ?? null, params.passwordHash, params.reason ?? null],
+  );
+  return rowToUser(rows[0] as Record<string, unknown>);
+}
+
+export async function approveUser(userId: number, adminEmail: string, notes?: string): Promise<void> {
+  const db = getPool();
+  await db.query(
+    `UPDATE users SET is_approved = true, approved_at = NOW(), approved_by = $1, admin_notes = $2 WHERE id = $3`,
+    [adminEmail, notes ?? null, userId],
+  );
+}
+
+export async function rejectUser(userId: number, adminEmail: string, notes?: string): Promise<void> {
+  const db = getPool();
+  await db.query(
+    `UPDATE users SET is_approved = false, approved_at = NOW(), approved_by = $1, admin_notes = $2 WHERE id = $3`,
+    [adminEmail, notes ?? 'Access request rejected.', userId],
+  );
+}
+
+export async function revokeUser(userId: number): Promise<void> {
+  const db = getPool();
+  await db.query('UPDATE users SET is_approved = false WHERE id = $1', [userId]);
+}
+
+export async function updatePassword(userId: number, passwordHash: string): Promise<void> {
+  const db = getPool();
+  await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
+}
+
+// ── Audit log ─────────────────────────────────────────────────────────────────
+
+export async function logAccess(entry: Omit<AuditEntry, 'id'>): Promise<void> {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO audit_log (user_id, user_email, part_id, part_number, revision, action, accessed_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [entry.userId, entry.userEmail, entry.partId, entry.partNumber, entry.revision, entry.action, entry.accessedAt],
+  );
+}
+
+export async function getAuditLog(limit = 500): Promise<AuditEntry[]> {
+  const db = getPool();
+  const { rows } = await db.query(
+    'SELECT * FROM audit_log ORDER BY accessed_at DESC LIMIT $1',
+    [limit],
+  );
+  return (rows as Record<string, unknown>[]).map((row) => ({
+    id: row['id'] as number,
+    userId: row['user_id'] as number,
+    userEmail: row['user_email'] as string,
+    partId: row['part_id'] as string,
+    partNumber: row['part_number'] as string,
+    revision: row['revision'] as string,
+    action: row['action'] as AuditEntry['action'],
+    accessedAt: (row['accessed_at'] as Date).toISOString(),
+  }));
+}
+
+// ── Assembly components ───────────────────────────────────────────────────────
+
+export async function getAssemblyComponents(parentId: string): Promise<Array<Drawing & { quantity: number; referenceDesignator?: string }>> {
+  const db = getPool();
+  const { rows } = await db.query(
+    `SELECT d.*, ac.quantity, ac.reference_designator
+     FROM drawings d
+     JOIN assembly_components ac ON ac.child_id = d.id
+     WHERE ac.parent_id = $1
+     ORDER BY d.name`,
+    [parentId],
+  );
+  return (rows as Record<string, unknown>[]).map((row) => ({
+    ...rowToDrawing(row),
+    quantity: row['quantity'] as number,
+    referenceDesignator: (row['reference_designator'] as string | null) ?? undefined,
+  }));
+}
+
+export async function addComponentToAssembly(parentId: string, childId: string, quantity = 1, referenceDesignator?: string): Promise<void> {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO assembly_components (parent_id, child_id, quantity, reference_designator)
+     VALUES ($1, $2, $3, $4) ON CONFLICT (parent_id, child_id) DO UPDATE SET quantity = $3, reference_designator = $4`,
+    [parentId, childId, quantity, referenceDesignator ?? null],
+  );
+}
+
+export async function removeComponentFromAssembly(parentId: string, childId: string): Promise<void> {
+  const db = getPool();
+  await db.query('DELETE FROM assembly_components WHERE parent_id = $1 AND child_id = $2', [parentId, childId]);
+}
+
+export async function listAssemblies(): Promise<Drawing[]> {
+  const db = getPool();
+  const { rows } = await db.query(
+    `SELECT DISTINCT d.* FROM drawings d
+     WHERE EXISTS (SELECT 1 FROM assembly_components ac WHERE ac.parent_id = d.id)
+     ORDER BY d.name`,
+  );
+  return (rows as Record<string, unknown>[]).map(rowToDrawing);
+}
+
+// ── Seed default data ─────────────────────────────────────────────────────────
+
+async function seedDefaultData(): Promise<void> {
+  const db = getPool();
+
+  const { rows: gRows } = await db.query('SELECT COUNT(*) as count FROM groups');
+  if (parseInt((gRows[0] as { count: string }).count, 10) === 0) {
+    await db.query(`
+      INSERT INTO groups (name) VALUES
+        ('Engineering Team'), ('Quality Assurance'),
+        ('Project Alpha'), ('Administrators')
+    `);
+  }
+
+  const { rows: lRows } = await db.query('SELECT COUNT(*) as count FROM locations');
+  if (parseInt((lRows[0] as { count: string }).count, 10) === 0) {
+    await db.query(`
+      INSERT INTO locations (name) VALUES
+        ('Main Factory'), ('R&D Center'), ('Parts Warehouse')
+    `);
+  }
+
+  const { rows: pRows } = await db.query('SELECT COUNT(*) as count FROM projects');
+  if (parseInt((pRows[0] as { count: string }).count, 10) === 0) {
+    await db.query(`
+      INSERT INTO projects (name, description) VALUES
+        ('Vehicle Model 2024', 'Next generation vehicle development project'),
+        ('Electric Powertrain', 'Electric vehicle powertrain development'),
+        ('Advanced Safety Systems', 'Next-gen safety and driver assistance systems')
+    `);
+  }
+
+  const { rows: dRows } = await db.query('SELECT COUNT(*) as count FROM drawings');
+  if (parseInt((dRows[0] as { count: string }).count, 10) === 0) {
+    await db.query(`
+      INSERT INTO drawings (name, revision, description) VALUES
+        ('Engine Block Drawing', 'v1.2', 'Technical drawing for main engine block assembly'),
+        ('Transmission Housing', 'v2.0', 'Housing assembly for automatic transmission'),
+        ('Brake Assembly', 'v1.5', 'Complete brake system assembly drawing')
+    `);
+  }
+
+  const { rows: uRows } = await db.query('SELECT COUNT(*) as count FROM users WHERE is_admin = true');
+  if (parseInt((uRows[0] as { count: string }).count, 10) === 0) {
+    const bcrypt = await import('bcryptjs');
+    const { config: cfg } = await import('./config');
+    const hash = await bcrypt.hash('ChangeMe123!', 12);
+    await db.query(
+      `INSERT INTO users (email, name, company, password_hash, is_approved, is_admin)
+       VALUES ($1, $2, $3, $4, true, true)`,
+      [cfg.adminEmail, 'Data Owner (Admin)', '3Shape', hash],
+    );
+    console.log(`[pgDb] Created default admin: ${cfg.adminEmail} / ChangeMe123!`);
+  }
 }

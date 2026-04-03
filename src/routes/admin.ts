@@ -3,24 +3,16 @@ import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import { requireAdmin } from '../middleware/auth';
 import {
-  getAllUsers,
-  getPendingUsers,
-  approveUser,
-  rejectUser,
-  revokeUser,
-  findUserById,
-  getAuditLog,
-  updatePassword,
-} from '../db';
-import {
+  getAllUsers, getPendingUsers, approveUser, rejectUser, revokeUser,
+  findUserById, getAuditLog, updatePassword,
   listGroups, listLocations, getGroupsForUser, getLocationsForUser,
   removeAllGroupsFromUser, addUserToGroup,
   removeAllLocationsFromUser, addLocationToUser,
+  listDrawings, listProjects,
 } from '../pgDb';
 
 const router = Router();
 
-// Rate limit for admin actions to prevent brute force / automation
 const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -29,142 +21,112 @@ const adminLimiter = rateLimit({
   message: 'Too many requests. Please slow down.',
 });
 
-// All admin routes require an admin token.
 router.use(requireAdmin);
 router.use(adminLimiter);
 
-// ---------------------------------------------------------------------------
-// GET /admin – redirect to dashboard
-// ---------------------------------------------------------------------------
 router.get('/', (req, res) => {
   res.redirect('/admin/dashboard');
 });
 
-// ---------------------------------------------------------------------------
-// GET /admin/dashboard
-// ---------------------------------------------------------------------------
 router.get('/dashboard', async (req, res) => {
-  const pendingUsers = getPendingUsers();
-  const allUsers = getAllUsers().filter((u) => !u.isAdmin);
-
-  let drawingsCount = 0;
-  let projectsCount = 0;
-  let groupsCount = 0;
-
   try {
-    const { listDrawings, listProjects, listGroups: pgListGroups } = await import('../pgDb');
-    const [drawings, projects, groups] = await Promise.all([listDrawings(), listProjects(), pgListGroups()]);
-    drawingsCount = drawings.length;
-    projectsCount = projects.length;
-    groupsCount = groups.length;
+    const [pendingUsers, allUsersRaw, drawings, projects, groups] = await Promise.all([
+      getPendingUsers(),
+      getAllUsers(),
+      listDrawings(),
+      listProjects(),
+      listGroups(),
+    ]);
+    const allUsers = allUsersRaw.filter((u) => !u.isAdmin);
+    res.render('admin/dashboard', {
+      title: 'Admin Dashboard',
+      pendingUsers,
+      allUsers,
+      drawingsCount: drawings.length,
+      projectsCount: projects.length,
+      groupsCount: groups.length,
+      user: req.user,
+    });
   } catch (err) {
-    console.error('Error getting counts:', err);
+    console.error('[admin] GET /dashboard error:', err);
+    res.status(500).render('error', { title: 'Error', message: 'Failed to load dashboard.', user: req.user });
   }
-
-  res.render('admin/dashboard', {
-    title: 'Admin Dashboard',
-    pendingUsers,
-    allUsers,
-    drawingsCount,
-    projectsCount,
-    groupsCount,
-    user: req.user,
-  });
 });
 
-// ---------------------------------------------------------------------------
-// POST /admin/users/:id/approve
-// ---------------------------------------------------------------------------
-router.post('/users/:id/approve', (req, res) => {
-  const userId = parseInt((req.params['id'] as string), 10);
-  const notes = typeof req.body['notes'] === 'string' ? req.body['notes'].trim() : undefined;
+router.post('/users/:id/approve', async (req, res) => {
+  try {
+    const userId = parseInt((req.params['id'] as string), 10);
+    const notes = typeof req.body['notes'] === 'string' ? req.body['notes'].trim() : undefined;
 
-  const target = findUserById(userId);
-  if (!target) {
-    res.status(404).render('error', {
-      title: 'Not Found',
-      message: 'User not found.',
-      user: req.user,
-    });
-    return;
+    const target = await findUserById(userId);
+    if (!target) {
+      res.status(404).render('error', { title: 'Not Found', message: 'User not found.', user: req.user });
+      return;
+    }
+
+    await approveUser(userId, req.user!.email, notes);
+    res.redirect('/admin/dashboard');
+  } catch (err) {
+    console.error('[admin] POST /users/:id/approve error:', err);
+    res.status(500).render('error', { title: 'Error', message: 'Failed to approve user.', user: req.user });
   }
-
-  approveUser(userId, req.user!.email, notes);
-  res.redirect('/admin/dashboard');
 });
 
-// ---------------------------------------------------------------------------
-// POST /admin/users/:id/reject
-// ---------------------------------------------------------------------------
-router.post('/users/:id/reject', (req, res) => {
-  const userId = parseInt((req.params['id'] as string), 10);
-  const notes = typeof req.body['notes'] === 'string' ? req.body['notes'].trim() : undefined;
+router.post('/users/:id/reject', async (req, res) => {
+  try {
+    const userId = parseInt((req.params['id'] as string), 10);
+    const notes = typeof req.body['notes'] === 'string' ? req.body['notes'].trim() : undefined;
 
-  const target = findUserById(userId);
-  if (!target) {
-    res.status(404).render('error', {
-      title: 'Not Found',
-      message: 'User not found.',
-      user: req.user,
-    });
-    return;
+    const target = await findUserById(userId);
+    if (!target) {
+      res.status(404).render('error', { title: 'Not Found', message: 'User not found.', user: req.user });
+      return;
+    }
+
+    await rejectUser(userId, req.user!.email, notes);
+    res.redirect('/admin/dashboard');
+  } catch (err) {
+    console.error('[admin] POST /users/:id/reject error:', err);
+    res.status(500).render('error', { title: 'Error', message: 'Failed to reject user.', user: req.user });
   }
-
-  rejectUser(userId, req.user!.email, notes);
-  res.redirect('/admin/dashboard');
 });
 
-// ---------------------------------------------------------------------------
-// POST /admin/users/:id/revoke
-// ---------------------------------------------------------------------------
-router.post('/users/:id/revoke', (req, res) => {
-  const userId = parseInt((req.params['id'] as string), 10);
+router.post('/users/:id/revoke', async (req, res) => {
+  try {
+    const userId = parseInt((req.params['id'] as string), 10);
 
-  const target = findUserById(userId);
-  if (!target || target.isAdmin) {
-    res.status(400).render('error', {
-      title: 'Error',
-      message: 'Cannot revoke access for this user.',
-      user: req.user,
-    });
-    return;
+    const target = await findUserById(userId);
+    if (!target || target.isAdmin) {
+      res.status(400).render('error', { title: 'Error', message: 'Cannot revoke access for this user.', user: req.user });
+      return;
+    }
+
+    await revokeUser(userId);
+    res.redirect('/admin/dashboard');
+  } catch (err) {
+    console.error('[admin] POST /users/:id/revoke error:', err);
+    res.status(500).render('error', { title: 'Error', message: 'Failed to revoke user.', user: req.user });
   }
-
-  revokeUser(userId);
-  res.redirect('/admin/dashboard');
 });
 
-// ---------------------------------------------------------------------------
-// GET /admin/audit
-// ---------------------------------------------------------------------------
-router.get('/audit', (req, res) => {
-  const entries = getAuditLog(500);
-  res.render('admin/audit', {
-    title: 'Audit Log',
-    entries,
-    user: req.user,
-  });
+router.get('/audit', async (req, res) => {
+  try {
+    const entries = await getAuditLog(500);
+    res.render('admin/audit', { title: 'Audit Log', entries, user: req.user });
+  } catch (err) {
+    console.error('[admin] GET /audit error:', err);
+    res.status(500).render('error', { title: 'Error', message: 'Failed to load audit log.', user: req.user });
+  }
 });
 
-// ---------------------------------------------------------------------------
-// GET /admin/profile – admin password change
-// ---------------------------------------------------------------------------
 router.get('/profile', (req, res) => {
-  res.render('admin/profile', {
-    title: 'Change Password',
-    error: null,
-    success: false,
-    user: req.user,
-  });
+  res.render('admin/profile', { title: 'Change Password', error: null, success: false, user: req.user });
 });
 
-// ---------------------------------------------------------------------------
-// GET /admin/users - manage users
-// ---------------------------------------------------------------------------
 router.get('/users', async (req, res) => {
   try {
-    const allUsers = getAllUsers().filter((u) => !u.isAdmin);
-    const [groups, locations] = await Promise.all([listGroups(), listLocations()]);
+    const [allUsersRaw, groups, locations] = await Promise.all([getAllUsers(), listGroups(), listLocations()]);
+    const allUsers = allUsersRaw.filter((u) => !u.isAdmin);
 
     const usersWithDetails = await Promise.all(
       allUsers.map(async (user) => {
@@ -182,29 +144,20 @@ router.get('/users', async (req, res) => {
       }),
     );
 
-    res.render('admin/users', {
-      title: 'Manage Users',
-      users: usersWithDetails,
-      groups,
-      locations,
-      user: req.user,
-    });
+    res.render('admin/users', { title: 'Manage Users', users: usersWithDetails, groups, locations, user: req.user });
   } catch (err) {
     console.error('[admin] GET /users error:', err);
     res.status(500).render('error', { title: 'Error', message: 'Failed to load users.', user: req.user });
   }
 });
 
-// ---------------------------------------------------------------------------
-// POST /admin/users/:id/assign - assign group/location to user
-// ---------------------------------------------------------------------------
 router.post('/users/:id/assign', async (req, res) => {
   try {
     const userId = parseInt((req.params['id'] as string), 10);
     const groupId = typeof req.body['groupId'] === 'string' && req.body['groupId'] ? req.body['groupId'] : null;
     const locationId = typeof req.body['locationId'] === 'string' && req.body['locationId'] ? req.body['locationId'] : null;
 
-    const target = findUserById(userId);
+    const target = await findUserById(userId);
     if (!target) {
       res.status(404).render('error', { title: 'Not Found', message: 'User not found.', user: req.user });
       return;
@@ -223,9 +176,6 @@ router.post('/users/:id/assign', async (req, res) => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// GET /admin/profile
-// ---------------------------------------------------------------------------
 router.post('/profile', async (req, res) => {
   const { currentPassword, newPassword, confirmPassword } = req.body as {
     currentPassword?: string;
@@ -234,12 +184,7 @@ router.post('/profile', async (req, res) => {
   };
 
   const renderError = (error: string): void => {
-    res.render('admin/profile', {
-      title: 'Change Password',
-      error,
-      success: false,
-      user: req.user,
-    });
+    res.render('admin/profile', { title: 'Change Password', error, success: false, user: req.user });
   };
 
   if (!currentPassword || !newPassword || !confirmPassword) {
@@ -247,32 +192,24 @@ router.post('/profile', async (req, res) => {
     return;
   }
 
-  const dbUser = findUserById(req.user!.userId)!;
-  const valid = await bcrypt.compare(currentPassword, dbUser.passwordHash);
-  if (!valid) {
-    renderError('Current password is incorrect.');
-    return;
+  try {
+    const dbUser = await findUserById(req.user!.userId);
+    if (!dbUser) { renderError('User not found.'); return; }
+
+    const valid = await bcrypt.compare(currentPassword, dbUser.passwordHash);
+    if (!valid) { renderError('Current password is incorrect.'); return; }
+
+    if (newPassword.length < 8) { renderError('New password must be at least 8 characters.'); return; }
+    if (newPassword !== confirmPassword) { renderError('New passwords do not match.'); return; }
+
+    const hash = await bcrypt.hash(newPassword, 12);
+    await updatePassword(req.user!.userId, hash);
+
+    res.render('admin/profile', { title: 'Change Password', error: null, success: true, user: req.user });
+  } catch (err) {
+    console.error('[admin] POST /profile error:', err);
+    renderError('An error occurred. Please try again.');
   }
-
-  if (newPassword.length < 8) {
-    renderError('New password must be at least 8 characters.');
-    return;
-  }
-
-  if (newPassword !== confirmPassword) {
-    renderError('New passwords do not match.');
-    return;
-  }
-
-  const hash = await bcrypt.hash(newPassword, 12);
-  updatePassword(req.user!.userId, hash);
-
-  res.render('admin/profile', {
-    title: 'Change Password',
-    error: null,
-    success: true,
-    user: req.user,
-  });
 });
 
 export default router;
