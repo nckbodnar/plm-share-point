@@ -132,3 +132,44 @@ export interface AuditEntry {
   action: 'view_part' | 'view_document' | 'view_assembly';
   accessedAt: string;
 }
+
+export interface Drawing {
+  id: string;
+  name: string;
+  description?: string;
+  revision: string;
+  filePath?: string;
+  metadata: DrawingMetadata;
+  createdAt: string;
+  updatedAt: string;
+  // Populated via joins:
+  projects?: Project[];
+  locations?: DbLocation[];
+}
+
+export interface DrawingMetadata {
+  author?: string;
+  version?: string;
+  tags?: string[];
+  [key: string]: unknown;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DbLocation {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  createdAt: string;
+}

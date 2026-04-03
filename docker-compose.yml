@@ -1,0 +1,35 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: plm_sharepoint
+      POSTGRES_USER: plm_user
+      POSTGRES_PASSWORD: plm_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://plm_user:plm_password@postgres:5432/plm_sharepoint
+      SESSION_SECRET: change-me-in-production
+      JWT_SECRET: change-me-in-production-jwt
+      ADMIN_EMAIL: admin@example.com
+      UPLOAD_DIR: /app/uploads
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads:/app/uploads
+      - appdata:/app/data
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata:
+  uploads:
+  appdata:

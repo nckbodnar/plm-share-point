@@ -31,6 +31,11 @@ export const config = {
   /** SQLite database file path */
   dbPath: optional('DB_PATH', path.join(process.cwd(), 'data', 'plm-sharepoint.db')),
 
+  /** PostgreSQL connection URL */
+  databaseUrl: optional('DATABASE_URL', 'postgresql://plm_user:plm_password@localhost:5432/plm_sharepoint'),
+  /** Directory for uploaded PDF files */
+  uploadDir: optional('UPLOAD_DIR', './uploads'),
+
   plm: {
     /**
      * Which PLM adapter to use.
