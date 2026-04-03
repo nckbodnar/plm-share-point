@@ -11,7 +11,12 @@ import authRouter from './routes/auth';
 import partsRouter from './routes/parts';
 import adminRouter from './routes/admin';
 import assembliesRouter from './routes/assemblies';
+import drawingsRouter from './routes/drawings';
+import projectsRouter from './routes/projects';
+import locationsRouter from './routes/locations';
+import groupsRouter from './routes/groups';
 import { getDb } from './db'; // ensure DB is initialised on startup
+import { initPgDb } from './pgDb';
 
 const app = express();
 
@@ -114,11 +119,15 @@ app.use('/', authRouter);
 app.use('/parts', partsRouter);
 app.use('/assemblies', assembliesRouter);
 app.use('/admin', adminRouter);
+app.use('/drawings', drawingsRouter);
+app.use('/projects', projectsRouter);
+app.use('/locations', locationsRouter);
+app.use('/groups', groupsRouter);
 
-// Home → redirect to parts list (or login if not authenticated)
+// Home → redirect to drawings list (or login if not authenticated)
 app.get('/', (req, res) => {
   if (req.user) {
-    res.redirect('/parts');
+    res.redirect('/drawings');
   } else {
     res.redirect('/login');
   }
@@ -170,6 +179,11 @@ app.use(
 if (require.main === module) {
   // Ensure DB is initialised before accepting requests
   getDb();
+
+  // Initialise PostgreSQL schema (non-fatal if PG is unavailable)
+  initPgDb().catch((err: unknown) => {
+    console.warn('[server] PostgreSQL init failed (continuing without PG):', (err as Error).message);
+  });
 
   app.listen(config.port, () => {
     console.log(`PLM SharePoint running on http://localhost:${config.port}`);

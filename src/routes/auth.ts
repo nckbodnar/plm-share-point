@@ -23,6 +23,7 @@ function sanitizeRedirect(value: unknown): string {
   // Any path not in the allowlist falls back to the default.
   const ALLOWED: ReadonlySet<string> = new Set([
     '/parts',
+    '/drawings',
     '/admin/dashboard',
     '/admin/audit',
     '/admin/profile',
@@ -30,7 +31,7 @@ function sanitizeRedirect(value: unknown): string {
   if (typeof value === 'string' && ALLOWED.has(value)) {
     return value;
   }
-  return '/parts';
+  return '/drawings';
 }
 
 // ---------------------------------------------------------------------------
@@ -38,7 +39,7 @@ function sanitizeRedirect(value: unknown): string {
 // ---------------------------------------------------------------------------
 router.get('/login', (req, res) => {
   if (req.user) {
-    res.redirect('/parts');
+    res.redirect('/drawings');
     return;
   }
   const next = sanitizeRedirect(req.query['next']);
@@ -126,7 +127,7 @@ router.get('/logout', (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/request-access', (req, res) => {
   if (req.user) {
-    res.redirect('/parts');
+    res.redirect('/drawings');
     return;
   }
   res.render('request-access', { 
