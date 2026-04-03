@@ -8,5 +8,8 @@
   "transform": {
     "^.+\\.ts$": ["ts-jest", { "tsconfig": { "strict": true, "types": ["jest", "node"] } }]
   },
+  "moduleNameMapper": {
+    "^pg$": "<rootDir>/tests/__mocks__/pg.ts"
+  },
   "globals": {}
 }

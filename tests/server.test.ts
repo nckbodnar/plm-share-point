@@ -101,12 +101,12 @@ describe('POST /login', () => {
     expect(res.text).toContain('Invalid email or password');
   });
 
-  it('redirects to /parts on success', async () => {
+  it('redirects to /drawings on success', async () => {
     const res = await request(app)
       .post('/login')
       .send('email=viewer%40example.com&password=Password1!');
     expect(res.status).toBe(302);
-    expect(res.headers['location']).toBe('/parts');
+    expect(res.headers['location']).toBe('/drawings');
   });
 
   it('rejects unapproved user', async () => {

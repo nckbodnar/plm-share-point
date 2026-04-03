@@ -12,6 +12,7 @@ import {
   getAuditLog,
   updatePassword,
 } from '../db';
+import { listDrawings, listProjects, listGroups } from '../pgDb';
 
 const router = Router();
 
@@ -38,14 +39,34 @@ router.get('/', (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /admin/dashboard
 // ---------------------------------------------------------------------------
-router.get('/dashboard', (req, res) => {
+router.get('/dashboard', async (req, res) => {
   const pendingUsers = getPendingUsers();
   const allUsers = getAllUsers().filter((u) => !u.isAdmin);
+
+  let drawingsCount = 0;
+  let projectsCount = 0;
+  let groupsCount = 0;
+
+  try {
+    const [drawings, projects, groups] = await Promise.all([
+      listDrawings(),
+      listProjects(),
+      listGroups(),
+    ]);
+    drawingsCount = drawings.length;
+    projectsCount = projects.length;
+    groupsCount = groups.length;
+  } catch {
+    // PostgreSQL unavailable – leave counts at 0
+  }
 
   res.render('admin/dashboard', {
     title: 'Admin Dashboard',
     pendingUsers,
     allUsers,
+    drawingsCount,
+    projectsCount,
+    groupsCount,
     user: req.user,
   });
 });

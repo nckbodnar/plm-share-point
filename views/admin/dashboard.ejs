@@ -12,6 +12,64 @@
   </a>
 </div>
 
+<!-- Stats + Quick Actions -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card text-center shadow-sm h-100">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-primary"><%= drawingsCount %></div>
+        <div class="small text-muted">Drawings</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center shadow-sm h-100">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-success"><%= projectsCount %></div>
+        <div class="small text-muted">Projects</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center shadow-sm h-100">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-info"><%= groupsCount %></div>
+        <div class="small text-muted">Groups</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center shadow-sm h-100">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-warning"><%= allUsers.filter(u => u.isApproved).length %></div>
+        <div class="small text-muted">Approved Users</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header d-flex align-items-center gap-2">
+    <i class="bi bi-lightning-charge text-primary"></i>
+    <strong>Quick Actions</strong>
+  </div>
+  <div class="card-body d-flex flex-wrap gap-2">
+    <a href="/drawings" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-file-earmark-pdf me-1"></i>Manage Drawings
+    </a>
+    <a href="/projects" class="btn btn-outline-success btn-sm">
+      <i class="bi bi-folder me-1"></i>Manage Projects
+    </a>
+    <a href="/locations" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-geo-alt me-1"></i>Manage Locations
+    </a>
+    <a href="/groups" class="btn btn-outline-info btn-sm">
+      <i class="bi bi-people me-1"></i>Manage Groups
+    </a>
+  </div>
+</div>
+
 <!-- Pending Requests -->
 <div class="card shadow-sm mb-4">
   <div class="card-header d-flex align-items-center gap-2">
