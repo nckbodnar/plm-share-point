@@ -1,0 +1,157 @@
+<%- include('../partials/header', { title, user }) %>
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/projects">Projects</a></li>
+    <li class="breadcrumb-item active" aria-current="page"><%= project.name %></li>
+  </ol>
+</nav>
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1"><i class="bi bi-folder2-open me-2 text-primary"></i><%= project.name %></h1>
+    <% if (project.description) { %>
+      <p class="text-muted mb-0"><%= project.description %></p>
+    <% } %>
+  </div>
+  <a href="/projects" class="btn btn-outline-secondary btn-sm align-self-start">
+    <i class="bi bi-arrow-left me-1"></i>Back to list
+  </a>
+</div>
+
+<div class="row g-4">
+
+  <!-- Drawings in this project -->
+  <div class="col-12 col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-file-earmark-ruled text-primary"></i>
+        <strong>Drawings</strong>
+        <span class="badge bg-secondary ms-1"><%= drawings ? drawings.length : 0 %></span>
+      </div>
+      <div class="card-body p-0">
+        <% if (!drawings || drawings.length === 0) { %>
+          <p class="text-muted p-3 mb-0">No drawings assigned to this project.</p>
+        <% } else { %>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Name</th>
+                  <th>Revision</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% drawings.forEach(function(d) { %>
+                  <tr>
+                    <td>
+                      <a href="/drawings/<%= d.id %>" class="text-decoration-none">
+                        <i class="bi bi-file-earmark-ruled me-1 text-secondary"></i><%= d.name %>
+                      </a>
+                    </td>
+                    <td><span class="badge bg-secondary font-monospace"><%= d.revision || '–' %></span></td>
+                    <td class="text-muted small"><%= d.description || '–' %></td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Groups with access -->
+  <div class="col-12 col-lg-5">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-people text-primary"></i>
+        <strong>Groups with Access</strong>
+      </div>
+      <div class="card-body">
+        <% if (!groups || groups.length === 0) { %>
+          <p class="text-muted small mb-0">No groups assigned.</p>
+        <% } else { %>
+          <ul class="list-unstyled mb-0">
+            <% groups.forEach(function(g) { %>
+              <li class="mb-1">
+                <% if (user && user.isAdmin) { %>
+                  <a href="/groups/<%= g.id %>" class="text-decoration-none">
+                    <i class="bi bi-people-fill me-1 text-secondary"></i><%= g.name %>
+                  </a>
+                <% } else { %>
+                  <i class="bi bi-people-fill me-1 text-secondary"></i><%= g.name %>
+                <% } %>
+              </li>
+            <% }); %>
+          </ul>
+        <% } %>
+
+        <% if (user && user.isAdmin) { %>
+          <hr class="my-3" />
+          <div class="fw-semibold small mb-2">Assign Group</div>
+          <form method="POST" action="/projects/<%= project.id %>/groups/add" class="d-flex gap-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <select class="form-select form-select-sm" name="groupId">
+              <option value="">Select group…</option>
+              <% if (allGroups) { allGroups.forEach(function(g) { %>
+                <option value="<%= g.id %>"><%= g.name %></option>
+              <% }); } %>
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm text-nowrap">
+              <i class="bi bi-plus-lg me-1"></i>Add
+            </button>
+          </form>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Admin: Edit & Delete -->
+<% if (user && user.isAdmin) { %>
+  <div class="row g-4 mt-0">
+    <div class="col-12 col-lg-7">
+      <div class="card shadow-sm border-warning">
+        <div class="card-header bg-warning bg-opacity-10 d-flex align-items-center gap-2">
+          <i class="bi bi-pencil-square text-warning"></i>
+          <strong>Edit Project</strong>
+        </div>
+        <div class="card-body">
+          <form method="POST" action="/projects/<%= project.id %>">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <input type="hidden" name="_method" value="PUT" />
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="edit-name">Name</label>
+                <input type="text" class="form-control form-control-sm" id="edit-name" name="name" value="<%= project.name %>" required />
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="edit-description">Description</label>
+                <input type="text" class="form-control form-control-sm" id="edit-description" name="description" value="<%= project.description || '' %>" />
+              </div>
+              <div class="col-auto">
+                <button type="submit" class="btn btn-warning btn-sm">
+                  <i class="bi bi-save me-1"></i>Save Changes
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-auto align-self-end">
+      <form method="POST" action="/projects/<%= project.id %>/delete">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <button type="submit" class="btn btn-danger btn-sm"
+                onclick="return confirm('Permanently delete project <%= project.name %>?')">
+          <i class="bi bi-trash me-1"></i>Delete Project
+        </button>
+      </form>
+    </div>
+  </div>
+<% } %>
+
+<%- include('../partials/footer') %>
