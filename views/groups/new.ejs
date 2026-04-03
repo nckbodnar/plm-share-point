@@ -1,0 +1,36 @@
+<%- include('../partials/header', { title, user }) %>
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/groups">Groups</a></li>
+    <li class="breadcrumb-item active">New Group</li>
+  </ol>
+</nav>
+
+<div class="mb-4">
+  <h1 class="h3 mb-1"><i class="bi bi-plus-circle me-2 text-primary"></i>New Group</h1>
+</div>
+
+<% if (error) { %>
+  <div class="alert alert-danger"><%= error %></div>
+<% } %>
+
+<div class="card shadow-sm" style="max-width:400px;">
+  <div class="card-body">
+    <form method="POST" action="/groups">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <div class="mb-3">
+        <label class="form-label fw-semibold" for="name">Group Name <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" id="name" name="name" required autofocus />
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-check-lg me-1"></i>Create Group
+        </button>
+        <a href="/groups" class="btn btn-outline-secondary btn-sm">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

@@ -126,7 +126,7 @@ app.use('/admin', adminRouter);
 // Home → redirect to parts list (or login if not authenticated)
 app.get('/', (req, res) => {
   if (req.user) {
-    res.redirect('/parts');
+    res.redirect('/drawings');
   } else {
     res.redirect('/login');
   }

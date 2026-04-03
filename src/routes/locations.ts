@@ -1,74 +1,98 @@
 import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
-import { getAllLocations, getLocationById } from '../db';
+import { createLocation, getLocation, listLocations, updateLocation, deleteLocation } from '../pgDb';
 
 const router = Router();
-
-// Apply authentication to all routes
 router.use(requireAuth);
 
-// ---------------------------------------------------------------------------
-// GET /locations - list locations
-// ---------------------------------------------------------------------------
-router.get('/', (req, res) => {
+// ── List ──────────────────────────────────────────────────────────────────────
+router.get('/', async (req, res) => {
   try {
-    const q = (req.query['q'] as string) || '';
-    let locations = getAllLocations();
-    
-    if (q) {
-      locations = locations.filter(location => 
-        location.name.toLowerCase().includes(q.toLowerCase()) ||
-        location.type.toLowerCase().includes(q.toLowerCase()) ||
-        (location.address && location.address.toLowerCase().includes(q.toLowerCase()))
-      );
-    }
-
-    res.render('locations/index', {
-      title: 'Manage Locations',
-      user: req.user,
-      locations,
-      search: q
-    });
+    const locations = await listLocations();
+    res.render('locations/index', { title: 'Locations', user: req.user, locations });
   } catch (err) {
     console.error('[locations] GET / error:', err);
-    res.status(500).render('error', { 
-      title: 'Error', 
-      message: 'Failed to load locations.', 
-      user: req.user 
-    });
+    res.status(500).render('error', { title: 'Error', message: 'Failed to load locations.', user: req.user });
   }
 });
 
-// ---------------------------------------------------------------------------
-// GET /locations/:id - location detail
-// ---------------------------------------------------------------------------
-router.get('/:id', (req, res) => {
+// ── New form ──────────────────────────────────────────────────────────────────
+router.get('/new', requireAdmin, (_req, res) => {
+  res.render('locations/new', { title: 'New Location', user: _req.user, error: null });
+});
+
+// ── Create ────────────────────────────────────────────────────────────────────
+router.post('/', requireAdmin, async (req, res) => {
   try {
-    const locationId = parseInt(req.params.id);
-    const location = getLocationById(locationId);
-    
-    if (!location) {
-      res.status(404).render('error', {
-        title: 'Location Not Found',
-        message: 'The requested location does not exist.',
-        user: req.user
-      });
+    const { name } = req.body as Record<string, string>;
+    if (!name?.trim()) {
+      res.status(400).render('locations/new', { title: 'New Location', user: req.user, error: 'Name is required.' });
       return;
     }
-
-    res.render('locations/detail', {
-      title: `Location: ${location.name}`,
-      user: req.user,
-      location
-    });
+    await createLocation({ name: name.trim() });
+    res.redirect('/locations');
   } catch (err) {
-    console.error('[locations] GET /:id error:', err);
-    res.status(500).render('error', { 
-      title: 'Error', 
-      message: 'Failed to load location.', 
-      user: req.user 
-    });
+    console.error('[locations] POST / error:', err);
+    res.status(500).render('error', { title: 'Error', message: 'Failed to create location.', user: req.user });
   }
+});
+
+// ── Edit form ─────────────────────────────────────────────────────────────────
+router.get('/:id/edit', requireAdmin, async (req, res) => {
+  try {
+    const location = await getLocation((req.params['id'] as string));
+    if (!location) {
+      res.status(404).render('error', { title: 'Not Found', message: 'Location not found.', user: req.user });
+      return;
+    }
+    res.render('locations/edit', { title: 'Edit Location', user: req.user, location, error: null });
+  } catch (err) {
+    res.status(500).render('error', { title: 'Error', message: 'Failed to load location.', user: req.user });
+  }
+});
+
+// ── Update (form POST) ────────────────────────────────────────────────────────
+router.post('/:id', requireAdmin, async (req, res) => {
+  try {
+    const { name } = req.body as Record<string, string>;
+    if (!name?.trim()) {
+      const location = await getLocation((req.params['id'] as string));
+      res.status(400).render('locations/edit', { title: 'Edit Location', user: req.user, location, error: 'Name is required.' });
+      return;
+    }
+    await updateLocation((req.params['id'] as string), name.trim());
+    res.redirect('/locations');
+  } catch (err) {
+    res.status(500).render('error', { title: 'Error', message: 'Failed to update location.', user: req.user });
+  }
+});
+
+// ── Update (PUT JSON) ─────────────────────────────────────────────────────────
+router.put('/:id', requireAdmin, async (req, res) => {
+  try {
+    const { name } = req.body as Record<string, string>;
+    const updated = await updateLocation((req.params['id'] as string), name);
+    if (!updated) { res.status(404).json({ error: 'Location not found' }); return; }
+    res.json({ location: updated });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update location' });
+  }
+});
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+router.delete('/:id', requireAdmin, async (req, res) => {
+  try {
+    const ok = await deleteLocation((req.params['id'] as string));
+    if (!ok) { res.status(404).json({ error: 'Location not found' }); return; }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete location' });
+  }
+});
+
+router.post('/:id/delete', requireAdmin, async (req, res) => {
+  await deleteLocation((req.params['id'] as string));
+  res.redirect('/locations');
 });
 
 export default router;

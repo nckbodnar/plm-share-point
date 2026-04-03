@@ -71,6 +71,18 @@ CREATE TABLE IF NOT EXISTS drawing_locations (
   PRIMARY KEY (drawing_id, location_id)
 );
 
+CREATE TABLE IF NOT EXISTS project_locations (
+  project_id  UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  location_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  PRIMARY KEY (project_id, location_id)
+);
+
+CREATE TABLE IF NOT EXISTS user_locations (
+  user_email  TEXT NOT NULL,
+  location_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_email, location_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_drawings_metadata        ON drawings USING GIN (metadata);
 CREATE INDEX IF NOT EXISTS idx_drawings_name            ON drawings (name);
 CREATE INDEX IF NOT EXISTS idx_drawing_projects_drawing ON drawing_projects (drawing_id);
@@ -219,9 +231,23 @@ export async function getDrawingsForUser(userEmail: string): Promise<Drawing[]> 
     `SELECT DISTINCT d.*
      FROM drawings d
      JOIN drawing_projects dp ON dp.drawing_id = d.id
-     JOIN group_projects gp   ON gp.project_id  = dp.project_id
-     JOIN user_groups ug      ON ug.group_id    = gp.group_id
-     WHERE ug.user_email = $1
+     WHERE
+       -- user's group has access to this project
+       EXISTS (
+         SELECT 1 FROM group_projects gp
+         JOIN user_groups ug ON ug.group_id = gp.group_id
+         WHERE gp.project_id = dp.project_id AND ug.user_email = $1
+       )
+       AND
+       -- either no location restriction on this project, or user's location is allowed
+       (
+         NOT EXISTS (SELECT 1 FROM project_locations pl WHERE pl.project_id = dp.project_id)
+         OR EXISTS (
+           SELECT 1 FROM project_locations pl
+           JOIN user_locations ul ON ul.location_id = pl.location_id
+           WHERE pl.project_id = dp.project_id AND ul.user_email = $1
+         )
+       )
      ORDER BY d.name`,
     [userEmail],
   );
@@ -464,4 +490,94 @@ export async function getGroupsForProject(projectId: string): Promise<Group[]> {
     [projectId],
   );
   return (rows as Record<string, unknown>[]).map(rowToGroup);
+}
+
+// ── Project-Location access ───────────────────────────────────────────────────
+
+export async function addLocationToProject(projectId: string, locationId: string): Promise<void> {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO project_locations (project_id, location_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [projectId, locationId],
+  );
+}
+
+export async function removeLocationFromProject(projectId: string, locationId: string): Promise<void> {
+  const db = getPool();
+  await db.query('DELETE FROM project_locations WHERE project_id = $1 AND location_id = $2', [projectId, locationId]);
+}
+
+export async function getLocationsForProject(projectId: string): Promise<DbLocation[]> {
+  const db = getPool();
+  const { rows } = await db.query(
+    `SELECT l.* FROM locations l
+     JOIN project_locations pl ON pl.location_id = l.id
+     WHERE pl.project_id = $1
+     ORDER BY l.name`,
+    [projectId],
+  );
+  return (rows as Record<string, unknown>[]).map(rowToLocation);
+}
+
+// ── User-Location assignment ──────────────────────────────────────────────────
+
+export async function addLocationToUser(userEmail: string, locationId: string): Promise<void> {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO user_locations (user_email, location_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [userEmail, locationId],
+  );
+}
+
+export async function removeLocationFromUser(userEmail: string, locationId: string): Promise<void> {
+  const db = getPool();
+  await db.query('DELETE FROM user_locations WHERE user_email = $1 AND location_id = $2', [userEmail, locationId]);
+}
+
+export async function removeAllLocationsFromUser(userEmail: string): Promise<void> {
+  const db = getPool();
+  await db.query('DELETE FROM user_locations WHERE user_email = $1', [userEmail]);
+}
+
+export async function getLocationsForUser(userEmail: string): Promise<DbLocation[]> {
+  const db = getPool();
+  const { rows } = await db.query(
+    `SELECT l.* FROM locations l
+     JOIN user_locations ul ON ul.location_id = l.id
+     WHERE ul.user_email = $1
+     ORDER BY l.name`,
+    [userEmail],
+  );
+  return (rows as Record<string, unknown>[]).map(rowToLocation);
+}
+
+export async function removeAllGroupsFromUser(userEmail: string): Promise<void> {
+  const db = getPool();
+  await db.query('DELETE FROM user_groups WHERE user_email = $1', [userEmail]);
+}
+
+export async function updateGroup(id: string, name: string): Promise<Group | null> {
+  const db = getPool();
+  const { rows } = await db.query(
+    `UPDATE groups SET name = $1 WHERE id = $2 RETURNING *`,
+    [name, id],
+  );
+  if (rows.length === 0) return null;
+  return rowToGroup(rows[0] as Record<string, unknown>);
+}
+
+export async function listGroupsWithCounts(): Promise<(Group & { memberCount: number; projectCount: number })[]> {
+  const db = getPool();
+  const { rows } = await db.query(
+    `SELECT g.*,
+       (SELECT COUNT(*) FROM user_groups ug WHERE ug.group_id = g.id)::int AS member_count,
+       (SELECT COUNT(*) FROM group_projects gp WHERE gp.group_id = g.id)::int AS project_count
+     FROM groups g
+     ORDER BY g.name`,
+  );
+  return (rows as Record<string, unknown>[]).map((row) => ({
+    ...rowToGroup(row),
+    memberCount: row['member_count'] as number,
+    projectCount: row['project_count'] as number,
+  }));
 }
