@@ -33,16 +33,15 @@
               <li class="d-flex align-items-center justify-content-between mb-2">
                 <span>
                   <i class="bi bi-person-circle me-2 text-secondary"></i>
-                  <%= member.email || member.name || member %>
+                  <%= member %>
                 </span>
                 <% if (user && user.isAdmin) { %>
-                  <form method="POST" action="/groups/<%= group.id %>/members/<%= member.id || member %>/remove" class="d-inline ms-2">
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                    <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2"
-                            onclick="return confirm('Remove this member?')">
-                      <i class="bi bi-person-dash me-1"></i>Remove
-                    </button>
-                  </form>
+                  <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 ms-2"
+                          data-url="/groups/<%= group.id %>/users/<%= encodeURIComponent(member) %>"
+                          data-csrf="<%= csrfToken %>"
+                          onclick="removeMember(this)">
+                    <i class="bi bi-person-dash me-1"></i>Remove
+                  </button>
                 <% } %>
               </li>
             <% }); %>
@@ -52,7 +51,7 @@
         <% if (user && user.isAdmin) { %>
           <hr class="my-3" />
           <div class="fw-semibold small mb-2">Add Member by Email</div>
-          <form method="POST" action="/groups/<%= group.id %>/members/add" class="d-flex gap-2">
+          <form method="POST" action="/groups/<%= group.id %>/users" class="d-flex gap-2">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
             <input type="email" class="form-control form-control-sm" name="email" placeholder="user@example.com" required />
             <button type="submit" class="btn btn-primary btn-sm text-nowrap">
@@ -83,13 +82,12 @@
                   <i class="bi bi-folder2-open me-2 text-secondary"></i><%= p.name %>
                 </a>
                 <% if (user && user.isAdmin) { %>
-                  <form method="POST" action="/groups/<%= group.id %>/projects/<%= p.id %>/remove" class="d-inline ms-2">
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                    <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2"
-                            onclick="return confirm('Remove project <%= p.name %> from this group?')">
-                      <i class="bi bi-folder-minus me-1"></i>Remove
-                    </button>
-                  </form>
+                  <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 ms-2"
+                          data-url="/groups/<%= group.id %>/projects/<%= p.id %>"
+                          data-csrf="<%= csrfToken %>"
+                          onclick="removeAssignment(this.dataset.url, this.dataset.csrf, window.location.reload.bind(window.location))">
+                    <i class="bi bi-folder-minus me-1"></i>Remove
+                  </button>
                 <% } %>
               </li>
             <% }); %>
@@ -99,7 +97,7 @@
         <% if (user && user.isAdmin) { %>
           <hr class="my-3" />
           <div class="fw-semibold small mb-2">Add Project</div>
-          <form method="POST" action="/groups/<%= group.id %>/projects/add" class="d-flex gap-2">
+          <form method="POST" action="/groups/<%= group.id %>/projects" class="d-flex gap-2">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
             <select class="form-select form-select-sm" name="projectId">
               <option value="">Select project…</option>
@@ -120,14 +118,38 @@
 
 <% if (user && user.isAdmin) { %>
   <div class="mt-4">
-    <form method="POST" action="/groups/<%= group.id %>/delete">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-      <button type="submit" class="btn btn-danger btn-sm"
-              onclick="return confirm('Permanently delete group <%= group.name %>?')">
-        <i class="bi bi-trash me-1"></i>Delete Group
-      </button>
-    </form>
+    <button type="button" class="btn btn-danger btn-sm"
+            data-url="/groups/<%= group.id %>"
+            data-csrf="<%= csrfToken %>"
+            onclick="deleteEntity(this.dataset.url, this.dataset.csrf, '/groups')">
+      <i class="bi bi-trash me-1"></i>Delete Group
+    </button>
   </div>
 <% } %>
+
+<script>
+async function removeMember(btn) {
+  if (!confirm('Remove this member?')) return;
+  const url = btn.dataset.url;
+  const csrf = btn.dataset.csrf;
+  const r = await fetch(url, { method: 'DELETE', headers: { 'x-csrf-token': csrf } });
+  if (r.ok) window.location.reload();
+  else alert('Error: ' + await r.text());
+}
+
+async function removeAssignment(url, csrf, onSuccess) {
+  if (!confirm('Remove this assignment?')) return;
+  const r = await fetch(url, { method: 'DELETE', headers: { 'x-csrf-token': csrf } });
+  if (r.ok) onSuccess();
+  else alert('Error: ' + await r.text());
+}
+
+async function deleteEntity(url, csrf, redirectTo) {
+  if (!confirm('Permanently delete this item?')) return;
+  const r = await fetch(url, { method: 'DELETE', headers: { 'x-csrf-token': csrf } });
+  if (r.ok) window.location.href = redirectTo;
+  else alert('Delete failed: ' + await r.text());
+}
+</script>
 
 <%- include('../partials/footer') %>

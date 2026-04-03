@@ -11,6 +11,7 @@ import {
   removeGroupFromProject,
   getUsersInGroup,
   getProjectsForGroup,
+  listProjects,
 } from '../pgDb';
 
 const router = Router();
@@ -84,17 +85,18 @@ router.get('/:id', async (req, res) => {
       res.status(404).render('error', { title: 'Not Found', message: 'Group not found.', user: req.user });
       return;
     }
-    const [users, projects] = await Promise.all([
+    const [members, projectsInGroup, allProjects] = await Promise.all([
       getUsersInGroup(group.id),
       getProjectsForGroup(group.id),
+      listProjects(),
     ]);
 
     const wantsJson = req.headers['accept']?.includes('application/json');
     if (wantsJson) {
-      res.json({ group: { ...group, users, projects } });
+      res.json({ group: { ...group, users: members, projects: projectsInGroup } });
       return;
     }
-    res.render('groups/detail', { title: group.name, group, users, projects, user: req.user });
+    res.render('groups/detail', { title: group.name, group, members, projectsInGroup, allProjects, user: req.user });
   } catch (err) {
     console.error('[groups] GET /:id error:', err);
     res.status(500).render('error', { title: 'Error', message: 'Failed to load group.', user: req.user });

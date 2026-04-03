@@ -91,7 +91,7 @@
         <% if (user && user.isAdmin) { %>
           <hr class="my-3" />
           <div class="fw-semibold small mb-2">Assign Group</div>
-          <form method="POST" action="/projects/<%= project.id %>/groups/add" class="d-flex gap-2">
+          <form method="POST" action="/projects/<%= project.id %>/groups" class="d-flex gap-2">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
             <select class="form-select form-select-sm" name="groupId">
               <option value="">Select group…</option>
@@ -120,9 +120,7 @@
           <strong>Edit Project</strong>
         </div>
         <div class="card-body">
-          <form method="POST" action="/projects/<%= project.id %>">
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-            <input type="hidden" name="_method" value="PUT" />
+          <form id="editProjectForm">
             <div class="row g-3">
               <div class="col-12 col-md-6">
                 <label class="form-label" for="edit-name">Name</label>
@@ -133,7 +131,10 @@
                 <input type="text" class="form-control form-control-sm" id="edit-description" name="description" value="<%= project.description || '' %>" />
               </div>
               <div class="col-auto">
-                <button type="submit" class="btn btn-warning btn-sm">
+                <button type="button" class="btn btn-warning btn-sm"
+                        data-url="/projects/<%= project.id %>"
+                        data-csrf="<%= csrfToken %>"
+                        onclick="submitEdit(this.dataset.url, 'editProjectForm', this.dataset.csrf)">
                   <i class="bi bi-save me-1"></i>Save Changes
                 </button>
               </div>
@@ -143,15 +144,37 @@
       </div>
     </div>
     <div class="col-auto align-self-end">
-      <form method="POST" action="/projects/<%= project.id %>/delete">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-        <button type="submit" class="btn btn-danger btn-sm"
-                onclick="return confirm('Permanently delete project <%= project.name %>?')">
-          <i class="bi bi-trash me-1"></i>Delete Project
-        </button>
-      </form>
+      <button type="button" class="btn btn-danger btn-sm"
+              data-url="/projects/<%= project.id %>"
+              data-csrf="<%= csrfToken %>"
+              onclick="deleteEntity(this.dataset.url, this.dataset.csrf, '/projects')">
+        <i class="bi bi-trash me-1"></i>Delete Project
+      </button>
     </div>
   </div>
 <% } %>
+
+<script>
+async function submitEdit(url, formId, csrf) {
+  const form = document.getElementById(formId);
+  const fd = new FormData(form);
+  const body = {};
+  fd.forEach((v, k) => { body[k] = v; });
+  const r = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+    body: JSON.stringify(body),
+  });
+  if (r.ok) window.location.reload();
+  else alert('Save failed: ' + await r.text());
+}
+
+async function deleteEntity(url, csrf, redirectTo) {
+  if (!confirm('Permanently delete this item?')) return;
+  const r = await fetch(url, { method: 'DELETE', headers: { 'x-csrf-token': csrf } });
+  if (r.ok) window.location.href = redirectTo;
+  else alert('Delete failed: ' + await r.text());
+}
+</script>
 
 <%- include('../partials/footer') %>

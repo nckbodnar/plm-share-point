@@ -453,3 +453,15 @@ export async function getUsersInGroup(groupId: string): Promise<string[]> {
   );
   return (rows as { user_email: string }[]).map((r) => r.user_email);
 }
+
+export async function getGroupsForProject(projectId: string): Promise<Group[]> {
+  const db = getPool();
+  const { rows } = await db.query(
+    `SELECT g.* FROM groups g
+     JOIN group_projects gp ON gp.group_id = g.id
+     WHERE gp.project_id = $1
+     ORDER BY g.name`,
+    [projectId],
+  );
+  return (rows as Record<string, unknown>[]).map(rowToGroup);
+}

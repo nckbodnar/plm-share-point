@@ -10,6 +10,9 @@ import {
   addGroupToProject,
   removeGroupFromProject,
   getProjectsForGroup,
+  getGroupsForProject,
+  listDrawings,
+  listGroups,
 } from '../pgDb';
 
 const router = Router();
@@ -79,7 +82,12 @@ router.get('/:id', async (req, res) => {
       res.json({ project });
       return;
     }
-    res.render('projects/detail', { title: project.name, project, user: req.user });
+    const [drawings, groups, allGroups] = await Promise.all([
+      listDrawings({ projectId: String(req.params['id']) }),
+      getGroupsForProject(String(req.params['id'])),
+      listGroups(),
+    ]);
+    res.render('projects/detail', { title: project.name, project, drawings, groups, allGroups, user: req.user });
   } catch (err) {
     console.error('[projects] GET /:id error:', err);
     res.status(500).render('error', { title: 'Error', message: 'Failed to load project.', user: req.user });

@@ -18,6 +18,8 @@ import {
   addDrawingToLocation,
   removeDrawingFromLocation,
   getLocationsForDrawing,
+  listProjects,
+  listLocations,
 } from '../pgDb';
 
 const router = Router();
@@ -75,7 +77,17 @@ router.get('/', async (req, res) => {
       res.json({ drawings });
       return;
     }
-    res.render('drawings/index', { title: 'Drawings', drawings, user: req.user, q, project, location });
+    const [projects, locations] = await Promise.all([listProjects(), listLocations()]);
+    res.render('drawings/index', {
+      title: 'Drawings',
+      drawings,
+      user: req.user,
+      projects,
+      locations,
+      search: q ?? '',
+      selectedProject: project ?? '',
+      selectedLocation: location ?? '',
+    });
   } catch (err) {
     console.error('[drawings] GET / error:', err);
     res.status(500).render('error', { title: 'Error', message: 'Failed to load drawings.', user: req.user });
@@ -142,9 +154,11 @@ router.get('/:id', async (req, res) => {
       return;
     }
 
-    const [projects, locations] = await Promise.all([
+    const [projects, locations, allProjects, allLocations] = await Promise.all([
       getProjectsForDrawing(drawing.id),
       getLocationsForDrawing(drawing.id),
+      listProjects(),
+      listLocations(),
     ]);
     drawing.projects = projects;
     drawing.locations = locations;
@@ -154,7 +168,7 @@ router.get('/:id', async (req, res) => {
       res.json({ drawing });
       return;
     }
-    res.render('drawings/detail', { title: drawing.name, drawing, user: req.user });
+    res.render('drawings/detail', { title: drawing.name, drawing, allProjects, allLocations, user: req.user });
   } catch (err) {
     console.error('[drawings] GET /:id error:', err);
     res.status(500).render('error', { title: 'Error', message: 'Failed to load drawing.', user: req.user });
