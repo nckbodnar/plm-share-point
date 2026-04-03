@@ -12,7 +12,27 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.doc-viewer iframe').forEach((iframe) => {
     iframe.addEventListener('contextmenu', (e) => e.preventDefault());
   });
+  
+  // Highlight active menu item
+  highlightActiveMenuItem();
 });
+
+// Highlight the active menu item based on current path
+function highlightActiveMenuItem() {
+  const currentPath = window.location.pathname;
+  const menuLinks = document.querySelectorAll('.sidebar .nav-link');
+  
+  menuLinks.forEach(link => {
+    link.classList.remove('active');
+    const href = link.getAttribute('href');
+    
+    if (href === currentPath || 
+        (href === '/parts' && currentPath === '/') ||
+        (currentPath.startsWith(href) && href !== '/')) {
+      link.classList.add('active');
+    }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Shared CRUD helpers used by drawings/detail, projects/detail, groups/detail

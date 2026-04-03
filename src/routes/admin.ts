@@ -11,8 +11,13 @@ import {
   findUserById,
   getAuditLog,
   updatePassword,
+  getAllGroups,
+  getAllLocations,
+  getAllProjects,
+  getAllDrawings,
+  updateUserGroupAndLocation,
+  getUserWithGroupAndLocation,
 } from '../db';
-import { listDrawings, listProjects, listGroups } from '../pgDb';
 
 const router = Router();
 
@@ -48,16 +53,14 @@ router.get('/dashboard', async (req, res) => {
   let groupsCount = 0;
 
   try {
-    const [drawings, projects, groups] = await Promise.all([
-      listDrawings(),
-      listProjects(),
-      listGroups(),
-    ]);
+    const drawings = getAllDrawings();
+    const projects = getAllProjects();
+    const groups = getAllGroups();
     drawingsCount = drawings.length;
     projectsCount = projects.length;
     groupsCount = groups.length;
-  } catch {
-    // PostgreSQL unavailable – leave counts at 0
+  } catch (err) {
+    console.error('Error getting counts:', err);
   }
 
   res.render('admin/dashboard', {
@@ -158,7 +161,58 @@ router.get('/profile', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /admin/profile
+// GET /admin/users - manage users
+// ---------------------------------------------------------------------------
+router.get('/users', (req, res) => {
+  const allUsers = getAllUsers().filter((u) => !u.isAdmin);
+  const groups = getAllGroups();
+  const locations = getAllLocations();
+
+  // Get extended user info with group and location names
+  const usersWithDetails = allUsers.map(user => {
+    const details = getUserWithGroupAndLocation(user.id);
+    return {
+      ...user,
+      groupName: details?.group_name || null,
+      locationName: details?.location_name || null,
+      groupId: details?.group_id || null,
+      locationId: details?.location_id || null
+    };
+  });
+
+  res.render('admin/users', {
+    title: 'Manage Users',
+    users: usersWithDetails,
+    groups,
+    locations,
+    user: req.user,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /admin/users/:id/assign - assign group/location to user
+// ---------------------------------------------------------------------------
+router.post('/users/:id/assign', (req, res) => {
+  const userId = parseInt(req.params['id']!, 10);
+  const groupId = req.body['groupId'] ? parseInt(req.body['groupId']) : undefined;
+  const locationId = req.body['locationId'] ? parseInt(req.body['locationId']) : undefined;
+
+  const target = findUserById(userId);
+  if (!target) {
+    res.status(404).render('error', {
+      title: 'Not Found',
+      message: 'User not found.',
+      user: req.user,
+    });
+    return;
+  }
+
+  updateUserGroupAndLocation(userId, groupId, locationId);
+  res.redirect('/admin/users');
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/profile
 // ---------------------------------------------------------------------------
 router.post('/profile', async (req, res) => {
   const { currentPassword, newPassword, confirmPassword } = req.body as {

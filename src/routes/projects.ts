@@ -1,162 +1,129 @@
 import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
-import {
-  createProject,
-  getProject,
-  listProjects,
-  updateProject,
-  deleteProject,
-  getProjectsForDrawing,
-  addGroupToProject,
-  removeGroupFromProject,
-  getProjectsForGroup,
-  getGroupsForProject,
-  listDrawings,
-  listGroups,
-} from '../pgDb';
+import { getAllProjects, getProjectById, getProjectPermissions, getAllGroups, getAllLocations, addProjectPermission, removeProjectPermission, getAllDrawings, type Drawing } from '../db';
 
 const router = Router();
 
+// Apply authentication to all routes
 router.use(requireAuth);
 
 // ---------------------------------------------------------------------------
-// GET /projects - list all projects
+// GET /projects - list projects
 // ---------------------------------------------------------------------------
-router.get('/', async (req, res) => {
+router.get('/', (req, res) => {
   try {
-    const projects = await listProjects();
-    const wantsJson = req.headers['accept']?.includes('application/json');
-    if (wantsJson) {
-      res.json({ projects });
-      return;
+    const q = (req.query['q'] as string) || '';
+    let projects = getAllProjects();
+    
+    if (q) {
+      projects = projects.filter(project => 
+        project.name.toLowerCase().includes(q.toLowerCase()) ||
+        (project.description && project.description.toLowerCase().includes(q.toLowerCase()))
+      );
     }
-    res.render('projects/index', { title: 'Projects', projects, user: req.user });
+
+    res.render('projects/index', {
+      title: 'Manage Projects',
+      user: req.user,
+      projects,
+      search: q
+    });
   } catch (err) {
     console.error('[projects] GET / error:', err);
-    res.status(500).render('error', { title: 'Error', message: 'Failed to load projects.', user: req.user });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// GET /projects/new - create form (admin only)
-// ---------------------------------------------------------------------------
-router.get('/new', requireAdmin, (req, res) => {
-  res.render('projects/new', { title: 'New Project', user: req.user, error: null });
-});
-
-// ---------------------------------------------------------------------------
-// POST /projects - create project (admin only)
-// ---------------------------------------------------------------------------
-router.post('/', requireAdmin, async (req, res) => {
-  try {
-    const { name, description } = req.body as { name?: string; description?: string };
-    if (!name) {
-      res.status(400).json({ error: 'Name is required.' });
-      return;
-    }
-    const project = await createProject({ name, description });
-    const wantsJson = req.headers['accept']?.includes('application/json');
-    if (wantsJson) {
-      res.status(201).json({ project });
-      return;
-    }
-    res.redirect('/projects');
-  } catch (err) {
-    console.error('[projects] POST / error:', err);
-    res.status(500).json({ error: 'Failed to create project.' });
+    res.status(500).render('error', { 
+      title: 'Error', 
+      message: 'Failed to load projects.', 
+      user: req.user 
+    });
   }
 });
 
 // ---------------------------------------------------------------------------
 // GET /projects/:id - project detail
 // ---------------------------------------------------------------------------
-router.get('/:id', async (req, res) => {
+router.get('/:id', (req, res) => {
   try {
-    const project = await getProject(String(req.params['id']));
+    const projectId = parseInt(req.params.id as string);
+    const project = getProjectById(projectId);
+    
     if (!project) {
-      res.status(404).render('error', { title: 'Not Found', message: 'Project not found.', user: req.user });
+      res.status(404).render('error', {
+        title: 'Project Not Found',
+        message: 'The requested project does not exist.',
+        user: req.user
+      });
       return;
     }
-    const wantsJson = req.headers['accept']?.includes('application/json');
-    if (wantsJson) {
-      res.json({ project });
-      return;
-    }
-    const [drawings, groups, allGroups] = await Promise.all([
-      listDrawings({ projectId: String(req.params['id']) }),
-      getGroupsForProject(String(req.params['id'])),
-      listGroups(),
-    ]);
-    res.render('projects/detail', { title: project.name, project, drawings, groups, allGroups, user: req.user });
+
+    const permissions = getProjectPermissions(projectId);
+    const groups = getAllGroups();
+    const locations = getAllLocations();
+    
+    // Get drawings for this project
+    const allDrawings = getAllDrawings();
+    const projectDrawings = allDrawings.filter((d: Drawing) => d.projectId === projectId);
+
+    res.render('projects/detail', {
+      title: `Project: ${project.name}`,
+      user: req.user,
+      project,
+      permissions,
+      groups,
+      locations,
+      drawings: projectDrawings
+    });
   } catch (err) {
     console.error('[projects] GET /:id error:', err);
-    res.status(500).render('error', { title: 'Error', message: 'Failed to load project.', user: req.user });
+    res.status(500).render('error', { 
+      title: 'Error', 
+      message: 'Failed to load project.', 
+      user: req.user 
+    });
   }
 });
 
 // ---------------------------------------------------------------------------
-// PUT /projects/:id - update project (admin only)
+// POST /projects/:id/permissions - add permission (admin only)
 // ---------------------------------------------------------------------------
-router.put('/:id', requireAdmin, async (req, res) => {
+router.post('/:id/permissions', requireAdmin, (req, res) => {
   try {
-    const { name, description } = req.body as { name?: string; description?: string };
-    const project = await updateProject(String(req.params['id']), { name, description });
-    if (!project) {
-      res.status(404).json({ error: 'Project not found.' });
+    const projectId = parseInt(req.params.id as string);
+    const { groupId, locationId, permissionType } = req.body as {
+      groupId?: string;
+      locationId?: string;
+      permissionType?: string;
+    };
+
+    if (!groupId && !locationId) {
+      res.status(400).json({ error: 'Either group or location must be specified' });
       return;
     }
-    res.json({ project });
+
+    addProjectPermission(
+      projectId, 
+      groupId ? parseInt(groupId) : undefined, 
+      locationId ? parseInt(locationId) : undefined, 
+      permissionType || 'view'
+    );
+
+    res.redirect(`/projects/${projectId}`);
   } catch (err) {
-    console.error('[projects] PUT /:id error:', err);
-    res.status(500).json({ error: 'Failed to update project.' });
+    console.error('[projects] POST /:id/permissions error:', err);
+    res.status(500).json({ error: 'Failed to add permission.' });
   }
 });
 
 // ---------------------------------------------------------------------------
-// DELETE /projects/:id - delete project (admin only)
+// DELETE /projects/:id/permissions/:permissionId - remove permission (admin only)
 // ---------------------------------------------------------------------------
-router.delete('/:id', requireAdmin, async (req, res) => {
+router.delete('/:id/permissions/:permissionId', requireAdmin, (req, res) => {
   try {
-    const deleted = await deleteProject(String(req.params['id']));
-    if (!deleted) {
-      res.status(404).json({ error: 'Project not found.' });
-      return;
-    }
-    res.json({ success: true });
+    const permissionId = parseInt(req.params.permissionId as string);
+    removeProjectPermission(permissionId);
+    res.status(200).json({ success: true });
   } catch (err) {
-    console.error('[projects] DELETE /:id error:', err);
-    res.status(500).json({ error: 'Failed to delete project.' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// POST /projects/:id/groups - assign group to project (admin)
-// ---------------------------------------------------------------------------
-router.post('/:id/groups', requireAdmin, async (req, res) => {
-  try {
-    const { groupId } = req.body as { groupId?: string };
-    if (!groupId) {
-      res.status(400).json({ error: 'groupId is required.' });
-      return;
-    }
-    await addGroupToProject(groupId, String(req.params['id']));
-    res.json({ success: true });
-  } catch (err) {
-    console.error('[projects] POST /:id/groups error:', err);
-    res.status(500).json({ error: 'Failed to assign group.' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// DELETE /projects/:id/groups/:groupId - remove group from project (admin)
-// ---------------------------------------------------------------------------
-router.delete('/:id/groups/:groupId', requireAdmin, async (req, res) => {
-  try {
-    await removeGroupFromProject(String(req.params['groupId']), String(req.params['id']));
-    res.json({ success: true });
-  } catch (err) {
-    console.error('[projects] DELETE /:id/groups/:groupId error:', err);
-    res.status(500).json({ error: 'Failed to remove group from project.' });
+    console.error('[projects] DELETE /:id/permissions/:permissionId error:', err);
+    res.status(500).json({ error: 'Failed to remove permission.' });
   }
 });
 

@@ -8,6 +8,42 @@ body {
   letter-spacing: 0.02em;
 }
 
+/* Sidebar styles */
+.sidebar {
+  z-index: 1000;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar .nav-link {
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+}
+
+.sidebar .nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar .nav-link.active {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.sidebar-footer {
+  margin-top: auto;
+}
+
+/* Responsive sidebar */
+@media (max-width: 768px) {
+  .sidebar {
+    display: none;
+  }
+  
+  .main-content {
+    margin-left: 0 !important;
+  }
+}
+
 /* Part cards */
 .part-card {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
