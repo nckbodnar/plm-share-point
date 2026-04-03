@@ -20,18 +20,7 @@ const app = express();
 // ---------------------------------------------------------------------------
 app.use(
   helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'unpkg.com'],
-        styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'unpkg.com'],
-        fontSrc: ["'self'", 'cdn.jsdelivr.net', 'unpkg.com', 'data:'],
-        imgSrc: ["'self'", 'data:'],
-        connectSrc: ["'self'", 'cdn.jsdelivr.net', 'unpkg.com'],
-        frameSrc: ["'self'"],        // allow inline PDF viewer (same origin)
-        objectSrc: ["'none'"],
-      },
-    },
+    contentSecurityPolicy: false, // Disable CSP for development
   }),
 );
 
