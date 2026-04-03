@@ -127,29 +127,4 @@
   </div>
 <% } %>
 
-<script>
-async function removeMember(btn) {
-  if (!confirm('Remove this member?')) return;
-  const url = btn.dataset.url;
-  const csrf = btn.dataset.csrf;
-  const r = await fetch(url, { method: 'DELETE', headers: { 'x-csrf-token': csrf } });
-  if (r.ok) window.location.reload();
-  else alert('Error: ' + await r.text());
-}
-
-async function removeAssignment(url, csrf, onSuccess) {
-  if (!confirm('Remove this assignment?')) return;
-  const r = await fetch(url, { method: 'DELETE', headers: { 'x-csrf-token': csrf } });
-  if (r.ok) onSuccess();
-  else alert('Error: ' + await r.text());
-}
-
-async function deleteEntity(url, csrf, redirectTo) {
-  if (!confirm('Permanently delete this item?')) return;
-  const r = await fetch(url, { method: 'DELETE', headers: { 'x-csrf-token': csrf } });
-  if (r.ok) window.location.href = redirectTo;
-  else alert('Delete failed: ' + await r.text());
-}
-</script>
-
 <%- include('../partials/footer') %>

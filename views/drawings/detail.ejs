@@ -262,34 +262,4 @@
   <i class="bi bi-clock me-1"></i>Last updated: <%= new Date(drawing.updatedAt || drawing.createdAt).toLocaleString() %>
 </div>
 
-<script>
-async function removeAssignment(url, csrf, onSuccess) {
-  if (!confirm('Remove this assignment?')) return;
-  const r = await fetch(url, { method: 'DELETE', headers: { 'x-csrf-token': csrf } });
-  if (r.ok) onSuccess();
-  else alert('Error: ' + await r.text());
-}
-
-async function submitEdit(url, formId, csrf) {
-  const form = document.getElementById(formId);
-  const fd = new FormData(form);
-  const body = {};
-  fd.forEach((v, k) => { body[k] = v; });
-  const r = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
-    body: JSON.stringify(body),
-  });
-  if (r.ok) window.location.reload();
-  else alert('Save failed: ' + await r.text());
-}
-
-async function deleteEntity(url, csrf, redirectTo) {
-  if (!confirm('Permanently delete this item?')) return;
-  const r = await fetch(url, { method: 'DELETE', headers: { 'x-csrf-token': csrf } });
-  if (r.ok) window.location.href = redirectTo;
-  else alert('Delete failed: ' + await r.text());
-}
-</script>
-
 <%- include('../partials/footer') %>

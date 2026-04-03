@@ -26,11 +26,10 @@ router.get('/', async (req, res) => {
     const groups = await listGroups();
 
     const enriched = await Promise.all(
-      groups.map(async (g) => ({
-        ...g,
-        users: await getUsersInGroup(g.id),
-        projects: await getProjectsForGroup(g.id),
-      })),
+      groups.map(async (g) => {
+        const [users, projects] = await Promise.all([getUsersInGroup(g.id), getProjectsForGroup(g.id)]);
+        return { ...g, users, projects, memberCount: users.length, projectCount: projects.length };
+      }),
     );
 
     const wantsJson = req.headers['accept']?.includes('application/json');

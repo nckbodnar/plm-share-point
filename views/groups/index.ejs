@@ -39,14 +39,10 @@
                   </a>
                 </td>
                 <td>
-                  <span class="badge bg-secondary">
-                    <%= group.memberCount !== undefined ? group.memberCount : (group.members ? group.members.length : 0) %>
-                  </span>
+                  <span class="badge bg-secondary"><%= group.memberCount %></span>
                 </td>
                 <td>
-                  <span class="badge bg-secondary">
-                    <%= group.projectCount !== undefined ? group.projectCount : (group.projects ? group.projects.length : 0) %>
-                  </span>
+                  <span class="badge bg-secondary"><%= group.projectCount %></span>
                 </td>
                 <td>
                   <a href="/groups/<%= group.id %>" class="btn btn-outline-primary btn-sm">
