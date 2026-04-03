@@ -27,7 +27,7 @@ function highlightActiveMenuItem() {
     const href = link.getAttribute('href');
     
     if (href === currentPath || 
-        (href === '/parts' && currentPath === '/') ||
+        (href === '/drawings' && currentPath === '/') ||
         (currentPath.startsWith(href) && href !== '/')) {
       link.classList.add('active');
     }
