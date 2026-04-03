@@ -8,7 +8,8 @@
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
     "test": "jest --forceExit",
-    "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'"
+    "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
+    "seed": "ts-node src/seed.ts"
   },
   "dependencies": {
     "@types/multer": "^2.1.0",
