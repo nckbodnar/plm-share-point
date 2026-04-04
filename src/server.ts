@@ -64,12 +64,9 @@ app.use(cookieParser(config.sessionSecret));
 // ---------------------------------------------------------------------------
 const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => config.sessionSecret,
-  // Use a stable session identifier for development
-  getSessionIdentifier: (req) => {
-    // For stateless JWT auth, use a combination of IP and user agent
-    const identifier = `${req.ip || 'unknown'}-${req.get('user-agent') || 'unknown'}`;
-    return identifier;
-  },
+  // For stateless JWT auth use a fixed identifier – the CSRF secret already
+  // provides the required entropy; tying to IP breaks behind Docker NAT.
+  getSessionIdentifier: () => 'app',
   cookieName: '_csrf',
   cookieOptions: {
     httpOnly: true,
@@ -91,7 +88,7 @@ app.use(doubleCsrfProtection);
 
 // Make CSRF token available to all EJS views
 app.use((req, res, next) => {
-  res.locals['csrfToken'] = generateCsrfToken(req, res, { overwrite: true });
+  res.locals['csrfToken'] = generateCsrfToken(req, res);
   next();
 });
 
