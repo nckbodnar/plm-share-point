@@ -820,16 +820,17 @@ async function seedDefaultData(): Promise<void> {
     `);
   }
 
-  const { rows: uRows } = await db.query('SELECT COUNT(*) as count FROM users WHERE is_admin = true');
-  if (parseInt((uRows[0] as { count: string }).count, 10) === 0) {
-    const bcrypt = await import('bcryptjs');
-    const { config: cfg } = await import('./config');
-    const hash = await bcrypt.hash('ChangeMe123!', 12);
-    await db.query(
-      `INSERT INTO users (email, name, company, password_hash, is_approved, is_admin)
-       VALUES ($1, $2, $3, $4, true, true)`,
-      [cfg.adminEmail, 'Data Owner (Admin)', '3Shape', hash],
-    );
-    console.log(`[pgDb] Created default admin: ${cfg.adminEmail} / ChangeMe123!`);
-  }
+  const bcrypt = await import('bcryptjs');
+  const { config: cfg } = await import('./config');
+  const hash = await bcrypt.hash(cfg.adminPassword, 12);
+  await db.query(
+    `INSERT INTO users (email, name, company, password_hash, is_approved, is_admin)
+     VALUES ($1, $2, $3, $4, true, true)
+     ON CONFLICT (email)
+     DO UPDATE SET password_hash = EXCLUDED.password_hash,
+                   is_approved   = true,
+                   is_admin      = true`,
+    [cfg.adminEmail, 'Data Owner (Admin)', '3Shape', hash],
+  );
+  console.log(`[pgDb] Admin user synced: ${cfg.adminEmail}`);
 }

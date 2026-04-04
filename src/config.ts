@@ -12,6 +12,7 @@ export const config = {
   jwtSecret: optional('JWT_SECRET', 'dev-jwt-secret-change-in-production'),
   sessionSecret: optional('SESSION_SECRET', 'dev-session-secret-change-in-production'),
   adminEmail: optional('ADMIN_EMAIL', 'admin@example.com'),
+  adminPassword: optional('ADMIN_PASSWORD', 'ChangeMe123!'),
   databaseUrl: optional('DATABASE_URL', 'postgresql://plm_user:plm_password@localhost:5432/plm_sharepoint'),
   uploadDir: optional('UPLOAD_DIR', './uploads'),
   plm: {
