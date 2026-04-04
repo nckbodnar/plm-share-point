@@ -15,7 +15,7 @@ import drawingsRouter from './routes/drawings';
 import projectsRouter from './routes/projects';
 import locationsRouter from './routes/locations';
 import groupsRouter from './routes/groups';
-import { initPgDb } from './pgDb';
+import { getPool } from './pgDb'; // ensure PostgreSQL pool is initialised
 
 const app = express();
 
@@ -176,14 +176,12 @@ app.use(
 // Start
 // ---------------------------------------------------------------------------
 if (require.main === module) {
-  initPgDb().then(() => {
-    app.listen(config.port, () => {
-      console.log(`PLM SharePoint running on http://localhost:${config.port}`);
-      console.log(`Mode: ${config.nodeEnv}`);
-    });
-  }).catch((err) => {
-    console.error('[server] Failed to initialise database:', err);
-    process.exit(1);
+  // Ensure PostgreSQL pool is initialised before accepting requests
+  getPool();
+
+  app.listen(config.port, () => {
+    console.log(`PLM SharePoint running on http://localhost:${config.port}`);
+    console.log(`Mode: ${config.nodeEnv} | PLM mock: ${config.plm.useMock}`);
   });
 }
 
