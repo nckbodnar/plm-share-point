@@ -1,0 +1,195 @@
+<%- include('../partials/header', { title, user }) %>
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/projects">Projects</a></li>
+    <li class="breadcrumb-item active" aria-current="page"><%= project.name %></li>
+  </ol>
+</nav>
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1"><i class="bi bi-folder2-open me-2 text-primary"></i><%= project.name %></h1>
+    <% if (project.description) { %><p class="text-muted mb-0"><%= project.description %></p><% } %>
+  </div>
+  <a href="/projects" class="btn btn-outline-secondary btn-sm align-self-start">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<div class="row g-4">
+
+  <!-- Drawings in this project -->
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-file-earmark-ruled text-primary"></i>
+        <strong>Drawings</strong>
+        <span class="badge bg-secondary ms-1"><%= drawings ? drawings.length : 0 %></span>
+      </div>
+      <div class="card-body">
+        <% if (!drawings || drawings.length === 0) { %>
+          <p class="text-muted small mb-0">No drawings assigned to this project.</p>
+        <% } else { %>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-light"><tr><th>Name</th><th>Revision</th><th></th></tr></thead>
+              <tbody>
+                <% drawings.forEach(function(d) { %>
+                  <tr>
+                    <td><a href="/drawings/<%= d.id %>" class="text-decoration-none"><%= d.name %></a></td>
+                    <td><span class="badge bg-secondary font-monospace"><%= d.revision %></span></td>
+                    <td><a href="/drawings/<%= d.id %>" class="btn btn-outline-primary btn-sm py-0">View</a></td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Groups with access -->
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-people text-primary"></i>
+        <strong>Allowed Groups</strong>
+        <span class="badge bg-secondary ms-1"><%= groups ? groups.length : 0 %></span>
+      </div>
+      <div class="card-body">
+        <% if (!groups || groups.length === 0) { %>
+          <p class="text-muted small mb-2">No groups assigned. Only admins can access.</p>
+        <% } else { %>
+          <ul class="list-unstyled mb-2">
+            <% groups.forEach(function(g) { %>
+              <li class="d-flex align-items-center justify-content-between mb-2">
+                <a href="/groups/<%= g.id %>" class="text-decoration-none">
+                  <i class="bi bi-people-fill me-1 text-secondary"></i><%= g.name %>
+                </a>
+                <% if (user && user.isAdmin) { %>
+                  <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 ms-2"
+                          data-url="/projects/<%= project.id %>/groups/<%= g.id %>"
+                          data-csrf="<%= csrfToken %>"
+                          onclick="removeAssignment(this.dataset.url, this.dataset.csrf, window.location.reload.bind(window.location))">
+                    <i class="bi bi-x"></i>
+                  </button>
+                <% } %>
+              </li>
+            <% }); %>
+          </ul>
+        <% } %>
+        <% if (user && user.isAdmin) { %>
+          <hr class="my-2" />
+          <form method="POST" action="/projects/<%= project.id %>/groups" class="d-flex gap-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <select class="form-select form-select-sm" name="groupId">
+              <option value="">Select group…</option>
+              <% if (allGroups) { allGroups.forEach(function(g) { %>
+                <option value="<%= g.id %>"><%= g.name %></option>
+              <% }); } %>
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm text-nowrap">
+              <i class="bi bi-plus-lg me-1"></i>Add
+            </button>
+          </form>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Locations with access -->
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-geo-alt text-primary"></i>
+        <strong>Allowed Locations</strong>
+        <span class="badge bg-secondary ms-1"><%= locations ? locations.length : 0 %></span>
+      </div>
+      <div class="card-body">
+        <% if (!locations || locations.length === 0) { %>
+          <p class="text-muted small mb-2">No locations assigned — all locations allowed.</p>
+        <% } else { %>
+          <ul class="list-unstyled mb-2">
+            <% locations.forEach(function(l) { %>
+              <li class="d-flex align-items-center justify-content-between mb-2">
+                <span><i class="bi bi-geo-alt-fill me-1 text-secondary"></i><%= l.name %></span>
+                <% if (user && user.isAdmin) { %>
+                  <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 ms-2"
+                          data-url="/projects/<%= project.id %>/locations/<%= l.id %>"
+                          data-csrf="<%= csrfToken %>"
+                          onclick="removeAssignment(this.dataset.url, this.dataset.csrf, window.location.reload.bind(window.location))">
+                    <i class="bi bi-x"></i>
+                  </button>
+                <% } %>
+              </li>
+            <% }); %>
+          </ul>
+        <% } %>
+        <% if (user && user.isAdmin) { %>
+          <hr class="my-2" />
+          <form method="POST" action="/projects/<%= project.id %>/locations" class="d-flex gap-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <select class="form-select form-select-sm" name="locationId">
+              <option value="">Select location…</option>
+              <% if (allLocations) { allLocations.forEach(function(l) { %>
+                <option value="<%= l.id %>"><%= l.name %></option>
+              <% }); } %>
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm text-nowrap">
+              <i class="bi bi-plus-lg me-1"></i>Add
+            </button>
+          </form>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Admin: Edit & Delete -->
+<% if (user && user.isAdmin) { %>
+  <div class="row g-4 mt-0">
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-sm border-warning">
+        <div class="card-header bg-warning bg-opacity-10 d-flex align-items-center gap-2">
+          <i class="bi bi-pencil-square text-warning"></i>
+          <strong>Edit Project</strong>
+        </div>
+        <div class="card-body">
+          <form id="editProjectForm">
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="edit-name">Name</label>
+                <input type="text" class="form-control form-control-sm" id="edit-name" name="name" value="<%= project.name %>" required />
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="edit-description">Description</label>
+                <textarea class="form-control form-control-sm" id="edit-description" name="description" rows="2"><%= project.description || '' %></textarea>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-warning btn-sm"
+                        data-url="/projects/<%= project.id %>"
+                        data-csrf="<%= csrfToken %>"
+                        onclick="submitEdit(this.dataset.url, 'editProjectForm', this.dataset.csrf)">
+                  <i class="bi bi-save me-1"></i>Save Changes
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-auto align-self-end">
+      <button type="button" class="btn btn-danger btn-sm"
+              data-url="/projects/<%= project.id %>"
+              data-csrf="<%= csrfToken %>"
+              onclick="deleteEntity(this.dataset.url, this.dataset.csrf, '/projects')">
+        <i class="bi bi-trash me-1"></i>Delete Project
+      </button>
+    </div>
+  </div>
+<% } %>
+
+<%- include('../partials/footer') %>

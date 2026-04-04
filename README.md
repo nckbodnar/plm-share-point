@@ -309,3 +309,52 @@ The application is a standard Node.js process.  Suggested options:
 | **IIS ARR / nginx reverse proxy** | Proxy `localhost:3000`; terminate TLS at the proxy |
 
 Set `NODE_ENV=production` in production and use a reverse proxy for TLS.
+---
+
+## PostgreSQL Migration
+
+The application now supports an optional PostgreSQL backend for drawings, projects, locations, and groups.
+
+### New Environment Variables
+
+| Variable | Description | Default |
+|---|---|---|
+| `DATABASE_URL` | PostgreSQL connection string (e.g. `postgres://user:pass@host:5432/dbname`) | *(none – PG disabled if unset)* |
+| `UPLOAD_DIR` | Directory where uploaded PDF files are stored | `./data/uploads` |
+
+If `DATABASE_URL` is not set the application starts normally using the SQLite user database only.
+
+### New Features
+
+- **Drawings** – store engineering drawings with metadata (name, description, revision). Upload and download PDF files.
+- **Projects** – group drawings into projects for organised access control.
+- **Locations** – tag drawings with physical or logical locations.
+- **Groups** – assign users to groups; groups are granted access to projects.
+
+### Access Control Model
+
+```
+User → Group(s) → Project(s) → Drawing(s)
+```
+
+A user can view a drawing only if they belong to a group that has been granted access to at least one project the drawing is associated with.
+
+### Seeding the Database
+
+```bash
+npm run seed
+```
+
+Populates the PostgreSQL database with sample projects, locations, groups, and drawings.
+
+### Docker Compose
+
+```bash
+docker-compose up
+```
+
+Starts both the Node.js application (port 3000) and a PostgreSQL instance. The `DATABASE_URL` is pre-configured in `docker-compose.yml`.
+
+### Admin Dashboard
+
+The admin dashboard at `/admin/dashboard` now shows counts of drawings, projects, and groups, and provides quick-action links to manage each resource.

@@ -1,0 +1,130 @@
+<%- include('../partials/header', { title, user }) %>
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/groups">Groups</a></li>
+    <li class="breadcrumb-item active" aria-current="page"><%= group.name %></li>
+  </ol>
+</nav>
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
+  <h1 class="h3 mb-0"><i class="bi bi-people me-2 text-primary"></i><%= group.name %></h1>
+  <a href="/groups" class="btn btn-outline-secondary btn-sm align-self-start">
+    <i class="bi bi-arrow-left me-1"></i>Back to list
+  </a>
+</div>
+
+<div class="row g-4">
+
+  <!-- Members -->
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-person-badge text-primary"></i>
+        <strong>Members</strong>
+        <span class="badge bg-secondary ms-1"><%= members ? members.length : 0 %></span>
+      </div>
+      <div class="card-body">
+        <% if (!members || members.length === 0) { %>
+          <p class="text-muted small mb-0">No members in this group.</p>
+        <% } else { %>
+          <ul class="list-unstyled mb-0">
+            <% members.forEach(function(member) { %>
+              <li class="d-flex align-items-center justify-content-between mb-2">
+                <span>
+                  <i class="bi bi-person-circle me-2 text-secondary"></i>
+                  <%= member %>
+                </span>
+                <% if (user && user.isAdmin) { %>
+                  <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 ms-2"
+                          data-url="/groups/<%= group.id %>/users/<%= encodeURIComponent(member) %>"
+                          data-csrf="<%= csrfToken %>"
+                          onclick="removeMember(this)">
+                    <i class="bi bi-person-dash me-1"></i>Remove
+                  </button>
+                <% } %>
+              </li>
+            <% }); %>
+          </ul>
+        <% } %>
+
+        <% if (user && user.isAdmin) { %>
+          <hr class="my-3" />
+          <div class="fw-semibold small mb-2">Add Member by Email</div>
+          <form method="POST" action="/groups/<%= group.id %>/users" class="d-flex gap-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <input type="email" class="form-control form-control-sm" name="email" placeholder="user@example.com" required />
+            <button type="submit" class="btn btn-primary btn-sm text-nowrap">
+              <i class="bi bi-person-plus me-1"></i>Add
+            </button>
+          </form>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Projects -->
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-folder text-primary"></i>
+        <strong>Projects</strong>
+        <span class="badge bg-secondary ms-1"><%= projectsInGroup ? projectsInGroup.length : 0 %></span>
+      </div>
+      <div class="card-body">
+        <% if (!projectsInGroup || projectsInGroup.length === 0) { %>
+          <p class="text-muted small mb-0">No projects assigned to this group.</p>
+        <% } else { %>
+          <ul class="list-unstyled mb-0">
+            <% projectsInGroup.forEach(function(p) { %>
+              <li class="d-flex align-items-center justify-content-between mb-2">
+                <a href="/projects/<%= p.id %>" class="text-decoration-none">
+                  <i class="bi bi-folder2-open me-2 text-secondary"></i><%= p.name %>
+                </a>
+                <% if (user && user.isAdmin) { %>
+                  <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 ms-2"
+                          data-url="/groups/<%= group.id %>/projects/<%= p.id %>"
+                          data-csrf="<%= csrfToken %>"
+                          onclick="removeAssignment(this.dataset.url, this.dataset.csrf, window.location.reload.bind(window.location))">
+                    <i class="bi bi-folder-minus me-1"></i>Remove
+                  </button>
+                <% } %>
+              </li>
+            <% }); %>
+          </ul>
+        <% } %>
+
+        <% if (user && user.isAdmin) { %>
+          <hr class="my-3" />
+          <div class="fw-semibold small mb-2">Add Project</div>
+          <form method="POST" action="/groups/<%= group.id %>/projects" class="d-flex gap-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <select class="form-select form-select-sm" name="projectId">
+              <option value="">Select project…</option>
+              <% if (allProjects) { allProjects.forEach(function(p) { %>
+                <option value="<%= p.id %>"><%= p.name %></option>
+              <% }); } %>
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm text-nowrap">
+              <i class="bi bi-plus-lg me-1"></i>Add
+            </button>
+          </form>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<% if (user && user.isAdmin) { %>
+  <div class="mt-4">
+    <button type="button" class="btn btn-danger btn-sm"
+            data-url="/groups/<%= group.id %>"
+            data-csrf="<%= csrfToken %>"
+            onclick="deleteEntity(this.dataset.url, this.dataset.csrf, '/groups')">
+      <i class="bi bi-trash me-1"></i>Delete Group
+    </button>
+  </div>
+<% } %>
+
+<%- include('../partials/footer') %>

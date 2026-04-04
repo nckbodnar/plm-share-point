@@ -1,0 +1,265 @@
+<%- include('../partials/header', { title, user }) %>
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/drawings">Drawings</a></li>
+    <li class="breadcrumb-item active" aria-current="page"><%= drawing.name %></li>
+  </ol>
+</nav>
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1">
+      <%= drawing.name %>
+      <% if (drawing.revision) { %>
+        <span class="badge bg-secondary font-monospace ms-2 fs-6"><%= drawing.revision %></span>
+      <% } %>
+    </h1>
+    <% if (drawing.description) { %>
+      <p class="text-muted mb-0"><%= drawing.description %></p>
+    <% } %>
+  </div>
+  <a href="/drawings" class="btn btn-outline-secondary btn-sm align-self-start">
+    <i class="bi bi-arrow-left me-1"></i>Back to list
+  </a>
+</div>
+
+<div class="row g-4">
+
+  <!-- Metadata -->
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-tag text-primary"></i>
+        <strong>Metadata</strong>
+      </div>
+      <div class="card-body">
+        <% if (drawing.metadata) { %>
+          <% if (drawing.metadata.author) { %>
+            <div class="mb-2">
+              <div class="text-muted small">Author</div>
+              <div class="fw-semibold"><%= drawing.metadata.author %></div>
+            </div>
+          <% } %>
+          <% if (drawing.metadata.version) { %>
+            <div class="mb-2">
+              <div class="text-muted small">Version</div>
+              <div class="fw-semibold"><%= drawing.metadata.version %></div>
+            </div>
+          <% } %>
+          <% if (drawing.metadata.tags && drawing.metadata.tags.length) { %>
+            <div class="mb-2">
+              <div class="text-muted small mb-1">Tags</div>
+              <% drawing.metadata.tags.forEach(function(tag) { %>
+                <span class="badge bg-info text-dark me-1 mb-1"><%= tag %></span>
+              <% }); %>
+            </div>
+          <% } %>
+          <%
+            const reserved = ['author', 'version', 'tags'];
+            const customKeys = Object.keys(drawing.metadata).filter(function(k) { return reserved.indexOf(k) === -1; });
+          %>
+          <% customKeys.forEach(function(key) { %>
+            <div class="mb-2">
+              <div class="text-muted small"><%= key %></div>
+              <div class="fw-semibold"><%= JSON.stringify(drawing.metadata[key]) %></div>
+            </div>
+          <% }); %>
+        <% } else { %>
+          <p class="text-muted small mb-0">No metadata.</p>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Projects & Locations -->
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-folder text-primary"></i>
+        <strong>Assigned Projects</strong>
+      </div>
+      <div class="card-body">
+        <% if (drawing.projects && drawing.projects.length) { %>
+          <ul class="list-unstyled mb-0">
+            <% drawing.projects.forEach(function(p) { %>
+              <li class="mb-1">
+                <a href="/projects/<%= p.id %>" class="text-decoration-none">
+                  <i class="bi bi-folder2-open me-1 text-secondary"></i><%= p.name %>
+                </a>
+                <% if (user && user.isAdmin) { %>
+                  <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 ms-2"
+                          data-url="/drawings/<%= drawing.id %>/projects/<%= p.id %>"
+                          data-csrf="<%= csrfToken %>"
+                          onclick="removeAssignment(this.dataset.url, this.dataset.csrf, window.location.reload.bind(window.location))"
+                          title="Remove">
+                    <i class="bi bi-x"></i>
+                  </button>
+                <% } %>
+              </li>
+            <% }); %>
+          </ul>
+        <% } else { %>
+          <p class="text-muted small mb-0">No projects assigned.</p>
+        <% } %>
+        <% if (user && user.isAdmin) { %>
+          <hr class="my-2" />
+          <form method="POST" action="/drawings/<%= drawing.id %>/projects" class="d-flex gap-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <select class="form-select form-select-sm" name="projectId">
+              <option value="">Select project…</option>
+              <% if (allProjects) { allProjects.forEach(function(p) { %>
+                <option value="<%= p.id %>"><%= p.name %></option>
+              <% }); } %>
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm text-nowrap">
+              <i class="bi bi-plus-lg me-1"></i>Add
+            </button>
+          </form>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-geo-alt text-primary"></i>
+        <strong>Assigned Locations</strong>
+      </div>
+      <div class="card-body">
+        <% if (drawing.locations && drawing.locations.length) { %>
+          <ul class="list-unstyled mb-0">
+            <% drawing.locations.forEach(function(l) { %>
+              <li class="mb-1">
+                <i class="bi bi-geo-alt-fill me-1 text-secondary"></i><%= l.name %>
+                <% if (user && user.isAdmin) { %>
+                  <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 ms-2"
+                          data-url="/drawings/<%= drawing.id %>/locations/<%= l.id %>"
+                          data-csrf="<%= csrfToken %>"
+                          onclick="removeAssignment(this.dataset.url, this.dataset.csrf, window.location.reload.bind(window.location))"
+                          title="Remove">
+                    <i class="bi bi-x"></i>
+                  </button>
+                <% } %>
+              </li>
+            <% }); %>
+          </ul>
+        <% } else { %>
+          <p class="text-muted small mb-0">No locations assigned.</p>
+        <% } %>
+        <% if (user && user.isAdmin) { %>
+          <hr class="my-2" />
+          <form method="POST" action="/drawings/<%= drawing.id %>/locations" class="d-flex gap-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <select class="form-select form-select-sm" name="locationId">
+              <option value="">Select location…</option>
+              <% if (allLocations) { allLocations.forEach(function(l) { %>
+                <option value="<%= l.id %>"><%= l.name %></option>
+              <% }); } %>
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm text-nowrap">
+              <i class="bi bi-plus-lg me-1"></i>Add
+            </button>
+          </form>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF Viewer -->
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-file-earmark-pdf text-danger"></i>
+        <strong>Drawing PDF</strong>
+      </div>
+      <div class="card-body">
+        <% if (drawing.filePath) { %>
+          <iframe src="/drawings/<%= drawing.id %>/download"
+                  style="width:100%;height:600px;border:1px solid #ccc;"
+                  title="Drawing PDF: <%= drawing.name %>"></iframe>
+          <div class="mt-2">
+            <a href="/drawings/<%= drawing.id %>/download" class="btn btn-outline-primary btn-sm" download>
+              <i class="bi bi-download me-1"></i>Download PDF
+            </a>
+          </div>
+        <% } else { %>
+          <div class="text-muted small fst-italic">
+            <i class="bi bi-file-earmark-x me-1"></i>No PDF attached.
+          </div>
+        <% } %>
+        <% if (user && user.isAdmin) { %>
+          <hr class="my-3" />
+          <div class="text-muted small mb-2 fw-semibold">Upload PDF</div>
+          <form method="POST" action="/drawings/<%= drawing.id %>/upload" enctype="multipart/form-data" class="d-flex gap-2 align-items-center flex-wrap">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <input type="file" class="form-control form-control-sm" name="pdf" accept="application/pdf" required />
+            <button type="submit" class="btn btn-primary btn-sm text-nowrap">
+              <i class="bi bi-upload me-1"></i>Upload
+            </button>
+          </form>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Admin: Edit & Delete -->
+<% if (user && user.isAdmin) { %>
+  <div class="row g-4 mt-0">
+    <div class="col-12">
+      <div class="card shadow-sm border-warning">
+        <div class="card-header bg-warning bg-opacity-10 d-flex align-items-center gap-2">
+          <i class="bi bi-pencil-square text-warning"></i>
+          <strong>Edit Drawing</strong>
+        </div>
+        <div class="card-body">
+          <form id="editDrawingForm">
+            <div class="row g-3">
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="edit-name">Name</label>
+                <input type="text" class="form-control form-control-sm" id="edit-name" name="name" value="<%= drawing.name %>" required />
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="edit-revision">Revision</label>
+                <input type="text" class="form-control form-control-sm" id="edit-revision" name="revision" value="<%= drawing.revision || '' %>" />
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="edit-description">Description</label>
+                <input type="text" class="form-control form-control-sm" id="edit-description" name="description" value="<%= drawing.description || '' %>" />
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="edit-metadata">Metadata (JSON)</label>
+                <textarea class="form-control form-control-sm font-monospace" id="edit-metadata" name="metadata" rows="4"><%= JSON.stringify(drawing.metadata || {}, null, 2) %></textarea>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-warning btn-sm"
+                        id="saveDrawingBtn"
+                        data-url="/drawings/<%= drawing.id %>"
+                        data-csrf="<%= csrfToken %>"
+                        onclick="submitEdit(this.dataset.url, 'editDrawingForm', this.dataset.csrf)">
+                  <i class="bi bi-save me-1"></i>Save Changes
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-auto">
+              <button type="button" class="btn btn-danger btn-sm"
+                      data-url="/drawings/<%= drawing.id %>"
+                      data-csrf="<%= csrfToken %>"
+                      onclick="deleteEntity(this.dataset.url, this.dataset.csrf, '/drawings')">
+                <i class="bi bi-trash me-1"></i>Delete Drawing
+              </button>
+    </div>
+  </div>
+<% } %>
+
+<div class="mt-4 small text-muted">
+  <i class="bi bi-clock me-1"></i>Last updated: <%= new Date(drawing.updatedAt || drawing.createdAt).toLocaleString() %>
+</div>
+
+<%- include('../partials/footer') %>

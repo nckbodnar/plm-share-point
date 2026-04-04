@@ -11,7 +11,11 @@ import authRouter from './routes/auth';
 import partsRouter from './routes/parts';
 import adminRouter from './routes/admin';
 import assembliesRouter from './routes/assemblies';
-import { getDb } from './db'; // ensure DB is initialised on startup
+import drawingsRouter from './routes/drawings';
+import projectsRouter from './routes/projects';
+import locationsRouter from './routes/locations';
+import groupsRouter from './routes/groups';
+import { initPgDb } from './pgDb';
 
 const app = express();
 
@@ -113,12 +117,16 @@ app.use(optionalAuth);
 app.use('/', authRouter);
 app.use('/parts', partsRouter);
 app.use('/assemblies', assembliesRouter);
+app.use('/drawings', drawingsRouter);
+app.use('/projects', projectsRouter);
+app.use('/locations', locationsRouter);
+app.use('/groups', groupsRouter);
 app.use('/admin', adminRouter);
 
 // Home → redirect to parts list (or login if not authenticated)
 app.get('/', (req, res) => {
   if (req.user) {
-    res.redirect('/parts');
+    res.redirect('/drawings');
   } else {
     res.redirect('/login');
   }
@@ -168,12 +176,14 @@ app.use(
 // Start
 // ---------------------------------------------------------------------------
 if (require.main === module) {
-  // Ensure DB is initialised before accepting requests
-  getDb();
-
-  app.listen(config.port, () => {
-    console.log(`PLM SharePoint running on http://localhost:${config.port}`);
-    console.log(`Mode: ${config.nodeEnv} | PLM mock: ${config.plm.useMock}`);
+  initPgDb().then(() => {
+    app.listen(config.port, () => {
+      console.log(`PLM SharePoint running on http://localhost:${config.port}`);
+      console.log(`Mode: ${config.nodeEnv}`);
+    });
+  }).catch((err) => {
+    console.error('[server] Failed to initialise database:', err);
+    process.exit(1);
   });
 }
 

@@ -1,8 +1,5 @@
-import Database from 'better-sqlite3';
-import bcrypt from 'bcryptjs';
+import { Pool } from 'pg';
 import {
-  setDb,
-  closeDb,
   findUserByEmail,
   findUserById,
   getAllUsers,
@@ -13,200 +10,179 @@ import {
   revokeUser,
   logAccess,
   getAuditLog,
-} from '../src/db';
+} from '../src/pgDb';
 
-function createTestDb(): Database.Database {
-  // In-memory SQLite database for isolated tests
-  const db = new Database(':memory:');
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-  return db;
-}
-
-function migrateTestDb(db: Database.Database): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      email         TEXT    UNIQUE NOT NULL COLLATE NOCASE,
-      name          TEXT    NOT NULL,
-      company       TEXT,
-      password_hash TEXT    NOT NULL,
-      is_approved   INTEGER NOT NULL DEFAULT 0,
-      is_admin      INTEGER NOT NULL DEFAULT 0,
-      reason        TEXT,
-      requested_at  TEXT    NOT NULL,
-      approved_at   TEXT,
-      approved_by   TEXT,
-      admin_notes   TEXT
-    );
-    CREATE TABLE IF NOT EXISTS audit_log (
-      id           INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id      INTEGER NOT NULL REFERENCES users(id),
-      user_email   TEXT    NOT NULL,
-      part_id      TEXT    NOT NULL,
-      part_number  TEXT    NOT NULL,
-      revision     TEXT    NOT NULL,
-      action       TEXT    NOT NULL,
-      accessed_at  TEXT    NOT NULL
-    );
-  `);
-}
+// Access the shared mockQuery via the mock Pool class
+const mockPool = new Pool();
+const mockQuery = mockPool.query as jest.Mock;
 
 beforeEach(() => {
-  const db = createTestDb();
-  migrateTestDb(db);
-  setDb(db);
+  mockQuery.mockReset();
+  mockQuery.mockResolvedValue({ rows: [] });
 });
 
-afterEach(() => {
-  closeDb();
+describe('findUserByEmail', () => {
+  it('queries with lowercase email comparison', async () => {
+    const fakeUser = {
+      id: 1, email: 'alice@example.com', name: 'Alice', company: null,
+      password_hash: 'hash', is_approved: false, is_admin: false,
+      reason: null, requested_at: new Date(), approved_at: null,
+      approved_by: null, admin_notes: null,
+    };
+    mockQuery.mockResolvedValueOnce({ rows: [fakeUser] });
+
+    const user = await findUserByEmail('Alice@Example.com');
+
+    expect(mockQuery).toHaveBeenCalledWith(
+      'SELECT * FROM users WHERE LOWER(email) = LOWER($1)',
+      ['Alice@Example.com'],
+    );
+    expect(user).toBeDefined();
+    expect(user!.email).toBe('alice@example.com');
+  });
+
+  it('returns undefined when no user found', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    const user = await findUserByEmail('nobody@example.com');
+    expect(user).toBeUndefined();
+  });
 });
 
-// ---------------------------------------------------------------------------
-// createUser / findUserByEmail / findUserById
-// ---------------------------------------------------------------------------
+describe('findUserById', () => {
+  it('queries by id', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    const user = await findUserById(9999);
+    expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM users WHERE id = $1', [9999]);
+    expect(user).toBeUndefined();
+  });
+
+  it('returns mapped user when found', async () => {
+    const fakeUser = {
+      id: 42, email: 'bob@example.com', name: 'Bob', company: 'ACME',
+      password_hash: 'hash', is_approved: true, is_admin: false,
+      reason: 'testing', requested_at: new Date(), approved_at: new Date(),
+      approved_by: 'admin@example.com', admin_notes: 'ok',
+    };
+    mockQuery.mockResolvedValueOnce({ rows: [fakeUser] });
+    const user = await findUserById(42);
+    expect(user).toBeDefined();
+    expect(user!.id).toBe(42);
+    expect(user!.isApproved).toBe(true);
+  });
+});
+
+describe('getAllUsers', () => {
+  it('selects all users ordered by requested_at DESC', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await getAllUsers();
+    expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM users ORDER BY requested_at DESC');
+  });
+});
+
+describe('getPendingUsers', () => {
+  it('filters unapproved non-admin users', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await getPendingUsers();
+    expect(mockQuery).toHaveBeenCalledWith(
+      'SELECT * FROM users WHERE is_approved = false AND is_admin = false ORDER BY requested_at DESC',
+    );
+  });
+});
 
 describe('createUser', () => {
-  it('creates a new unapproved user', () => {
-    const hash = bcrypt.hashSync('password123', 1);
-    const user = createUser({
-      email: 'alice@example.com',
-      name: 'Alice',
-      company: 'ACME',
-      passwordHash: hash,
-      reason: 'Need to check specs',
+  it('inserts user and returns mapped result', async () => {
+    const fakeUser = {
+      id: 1, email: 'carol@example.com', name: 'Carol', company: null,
+      password_hash: 'hash', is_approved: false, is_admin: false,
+      reason: 'Need access', requested_at: new Date(), approved_at: null,
+      approved_by: null, admin_notes: null,
+    };
+    mockQuery.mockResolvedValueOnce({ rows: [fakeUser] });
+
+    const user = await createUser({
+      email: 'carol@example.com',
+      name: 'Carol',
+      passwordHash: 'hash',
+      reason: 'Need access',
     });
 
-    expect(user.id).toBeGreaterThan(0);
-    expect(user.email).toBe('alice@example.com');
-    expect(user.name).toBe('Alice');
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO users'),
+      ['carol@example.com', 'Carol', null, 'hash', 'Need access'],
+    );
+    expect(user.email).toBe('carol@example.com');
     expect(user.isApproved).toBe(false);
-    expect(user.isAdmin).toBe(false);
-  });
-
-  it('findUserByEmail returns the created user (case-insensitive)', () => {
-    const hash = bcrypt.hashSync('password123', 1);
-    createUser({ email: 'Alice@Example.COM', name: 'Alice', passwordHash: hash });
-
-    const found = findUserByEmail('alice@example.com');
-    expect(found).toBeDefined();
-    expect(found!.name).toBe('Alice');
-  });
-
-  it('findUserByEmail returns undefined for unknown email', () => {
-    expect(findUserByEmail('nobody@example.com')).toBeUndefined();
-  });
-
-  it('findUserById returns undefined for unknown id', () => {
-    expect(findUserById(9999)).toBeUndefined();
   });
 });
 
-// ---------------------------------------------------------------------------
-// approveUser / revokeUser / rejectUser
-// ---------------------------------------------------------------------------
-
 describe('approveUser', () => {
-  it('sets is_approved to true', () => {
-    const hash = bcrypt.hashSync('pw', 1);
-    const user = createUser({ email: 'bob@example.com', name: 'Bob', passwordHash: hash });
-    expect(user.isApproved).toBe(false);
-
-    approveUser(user.id, 'admin@example.com', 'Looks good');
-    const updated = findUserById(user.id)!;
-    expect(updated.isApproved).toBe(true);
-    expect(updated.approvedBy).toBe('admin@example.com');
+  it('updates user approval status', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await approveUser(1, 'admin@example.com', 'Looks good');
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE users SET is_approved = true'),
+      ['admin@example.com', 'Looks good', 1],
+    );
   });
 });
 
 describe('rejectUser', () => {
-  it('keeps is_approved false and stores note', () => {
-    const hash = bcrypt.hashSync('pw', 1);
-    const user = createUser({ email: 'carol@example.com', name: 'Carol', passwordHash: hash });
-
-    rejectUser(user.id, 'admin@example.com', 'Not authorised');
-    const updated = findUserById(user.id)!;
-    expect(updated.isApproved).toBe(false);
-    expect(updated.adminNotes).toBe('Not authorised');
+  it('updates user with rejection notes', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await rejectUser(2, 'admin@example.com', 'Not authorised');
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE users SET is_approved = false'),
+      ['admin@example.com', 'Not authorised', 2],
+    );
   });
 });
 
 describe('revokeUser', () => {
-  it('sets is_approved back to false', () => {
-    const hash = bcrypt.hashSync('pw', 1);
-    const user = createUser({ email: 'dave@example.com', name: 'Dave', passwordHash: hash });
-    approveUser(user.id, 'admin@example.com');
-    expect(findUserById(user.id)!.isApproved).toBe(true);
-
-    revokeUser(user.id);
-    expect(findUserById(user.id)!.isApproved).toBe(false);
+  it('sets is_approved to false', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await revokeUser(3);
+    expect(mockQuery).toHaveBeenCalledWith(
+      'UPDATE users SET is_approved = false WHERE id = $1',
+      [3],
+    );
   });
 });
 
-// ---------------------------------------------------------------------------
-// getAllUsers / getPendingUsers
-// ---------------------------------------------------------------------------
-
-describe('getAllUsers / getPendingUsers', () => {
-  it('getPendingUsers returns only unapproved non-admin users', () => {
-    const hash = bcrypt.hashSync('pw', 1);
-    const u1 = createUser({ email: 'u1@x.com', name: 'U1', passwordHash: hash });
-    const u2 = createUser({ email: 'u2@x.com', name: 'U2', passwordHash: hash });
-    approveUser(u2.id, 'admin@x.com');
-
-    const pending = getPendingUsers();
-    expect(pending.map((u) => u.id)).toContain(u1.id);
-    expect(pending.map((u) => u.id)).not.toContain(u2.id);
-  });
-
-  it('getAllUsers includes both approved and pending', () => {
-    const hash = bcrypt.hashSync('pw', 1);
-    createUser({ email: 'a@x.com', name: 'A', passwordHash: hash });
-    const b = createUser({ email: 'b@x.com', name: 'B', passwordHash: hash });
-    approveUser(b.id, 'admin@x.com');
-
-    const all = getAllUsers();
-    expect(all.length).toBe(2);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Audit log
-// ---------------------------------------------------------------------------
-
-describe('logAccess / getAuditLog', () => {
-  it('stores an audit entry and retrieves it', () => {
-    const hash = bcrypt.hashSync('pw', 1);
-    const user = createUser({ email: 'eve@x.com', name: 'Eve', passwordHash: hash });
-
-    logAccess({
-      userId: user.id,
-      userEmail: user.email,
+describe('logAccess', () => {
+  it('inserts an audit log entry', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await logAccess({
+      userId: 1,
+      userEmail: 'user@example.com',
       partId: 'part-001',
       partNumber: 'PN-10001',
       revision: 'C',
       action: 'view_part',
-      accessedAt: new Date().toISOString(),
+      accessedAt: '2024-01-01T00:00:00Z',
     });
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO audit_log'),
+      [1, 'user@example.com', 'part-001', 'PN-10001', 'C', 'view_part', '2024-01-01T00:00:00Z'],
+    );
+  });
+});
 
-    const log = getAuditLog();
-    expect(log.length).toBe(1);
-    expect(log[0]!.partNumber).toBe('PN-10001');
-    expect(log[0]!.action).toBe('view_part');
+describe('getAuditLog', () => {
+  it('queries audit log with limit', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await getAuditLog(100);
+    expect(mockQuery).toHaveBeenCalledWith(
+      'SELECT * FROM audit_log ORDER BY accessed_at DESC LIMIT $1',
+      [100],
+    );
   });
 
-  it('getAuditLog returns entries in descending order', () => {
-    const hash = bcrypt.hashSync('pw', 1);
-    const user = createUser({ email: 'frank@x.com', name: 'Frank', passwordHash: hash });
-
-    const t1 = '2024-01-01T00:00:00Z';
-    const t2 = '2024-06-01T00:00:00Z';
-
-    logAccess({ userId: user.id, userEmail: user.email, partId: 'p1', partNumber: 'PN-1', revision: 'A', action: 'view_part', accessedAt: t1 });
-    logAccess({ userId: user.id, userEmail: user.email, partId: 'p2', partNumber: 'PN-2', revision: 'B', action: 'view_document', accessedAt: t2 });
-
-    const log = getAuditLog();
-    expect(log[0]!.accessedAt).toBe(t2); // newest first
-    expect(log[1]!.accessedAt).toBe(t1);
+  it('uses default limit of 500', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await getAuditLog();
+    expect(mockQuery).toHaveBeenCalledWith(
+      'SELECT * FROM audit_log ORDER BY accessed_at DESC LIMIT $1',
+      [500],
+    );
   });
 });

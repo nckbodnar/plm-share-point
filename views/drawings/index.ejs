@@ -1,0 +1,151 @@
+<%- include('../partials/header', { title, user }) %>
+
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+  <div>
+    <h1 class="h3 mb-1"><i class="bi bi-file-earmark-ruled me-2 text-primary"></i>Drawings</h1>
+    <p class="text-muted mb-0 small">Manage and browse technical drawings.</p>
+  </div>
+  <% if (user && user.isAdmin) { %>
+    <a href="/drawings/new" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>New Drawing
+    </a>
+  <% } %>
+</div>
+
+<!-- Search & Filter -->
+<form method="GET" action="/drawings" class="row g-2 align-items-end mb-4">
+  <div class="col-12 col-md-4">
+    <label class="form-label small mb-1" for="q">Search</label>
+    <div class="input-group input-group-sm">
+      <input type="search" class="form-control" id="q" name="q"
+             placeholder="Search drawings…" value="<%= typeof search !== 'undefined' ? search : '' %>" />
+      <button class="btn btn-outline-secondary" type="submit">
+        <i class="bi bi-search"></i>
+      </button>
+      <% if (typeof search !== 'undefined' && search) { %>
+        <a href="/drawings" class="btn btn-outline-danger" title="Clear">
+          <i class="bi bi-x-lg"></i>
+        </a>
+      <% } %>
+    </div>
+  </div>
+  <div class="col-12 col-md-3">
+    <label class="form-label small mb-1" for="project">Project</label>
+    <select class="form-select form-select-sm" id="project" name="project">
+      <option value="">All Projects</option>
+      <% if (typeof projects !== 'undefined') { projects.forEach(function(p) { %>
+        <option value="<%= p.id %>" <%= (typeof selectedProject !== 'undefined' && selectedProject === String(p.id)) ? 'selected' : '' %>>
+          <%= p.name %>
+        </option>
+      <% }); } %>
+    </select>
+  </div>
+  <div class="col-12 col-md-3">
+    <label class="form-label small mb-1" for="location">Location</label>
+    <select class="form-select form-select-sm" id="location" name="location">
+      <option value="">All Locations</option>
+      <% if (typeof locations !== 'undefined') { locations.forEach(function(l) { %>
+        <option value="<%= l.id %>" <%= (typeof selectedLocation !== 'undefined' && selectedLocation === String(l.id)) ? 'selected' : '' %>>
+          <%= l.name %>
+        </option>
+      <% }); } %>
+    </select>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-outline-primary btn-sm">Filter</button>
+  </div>
+</form>
+
+<% if (!drawings || drawings.length === 0) { %>
+  <div class="text-center py-5 text-muted">
+    <i class="bi bi-inbox display-3 mb-3 d-block"></i>
+    <p class="lead">
+      <% if (typeof search !== 'undefined' && search) { %>
+        No drawings matching "<strong><%= search %></strong>".
+      <% } else { %>
+        No drawings found.
+      <% } %>
+    </p>
+    <% if (typeof search !== 'undefined' && search) { %>
+      <a href="/drawings" class="btn btn-outline-secondary btn-sm">Clear search</a>
+    <% } %>
+  </div>
+<% } else { %>
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Name</th>
+              <th>Revision</th>
+              <th>Description</th>
+              <th>Author</th>
+              <th>Tags</th>
+              <th>Projects</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% drawings.forEach(function(drawing) { %>
+              <tr>
+                <td>
+                  <a href="/drawings/<%= drawing.id %>" class="fw-semibold text-decoration-none">
+                    <%= drawing.name %>
+                  </a>
+                </td>
+                <td>
+                  <span class="badge bg-secondary font-monospace"><%= drawing.revision || '–' %></span>
+                </td>
+                <td class="text-muted small" style="max-width:200px; white-space:pre-wrap;">
+                  <%= drawing.description || '–' %>
+                </td>
+                <td class="small">
+                  <%= (drawing.metadata && drawing.metadata.author) ? drawing.metadata.author : '–' %>
+                </td>
+                <td>
+                  <% if (drawing.metadata && drawing.metadata.tags && drawing.metadata.tags.length) { %>
+                    <% drawing.metadata.tags.forEach(function(tag) { %>
+                      <span class="badge bg-info text-dark me-1"><%= tag %></span>
+                    <% }); %>
+                  <% } else { %>
+                    <span class="text-muted small">–</span>
+                  <% } %>
+                </td>
+                <td class="small">
+                  <% if (drawing.projects && drawing.projects.length) { %>
+                    <%= drawing.projects.map(function(p) { return p.name; }).join(', ') %>
+                  <% } else { %>
+                    <span class="text-muted">–</span>
+                  <% } %>
+                </td>
+                <td>
+                  <a href="/drawings/<%= drawing.id %>" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-eye me-1"></i>View
+                  </a>
+                  <% if (user && user.isAdmin) { %>
+                    <a href="/drawings/<%= drawing.id %>/edit" class="btn btn-outline-secondary btn-sm">
+                      <i class="bi bi-pencil me-1"></i>Edit
+                    </a>
+                    <form method="POST" action="/drawings/<%= drawing.id %>/delete" class="d-inline">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                      <button type="submit" class="btn btn-outline-danger btn-sm"
+                              onclick="return confirm('Delete drawing <%= drawing.name %>?')">
+                        <i class="bi bi-trash me-1"></i>Delete
+                      </button>
+                    </form>
+                  <% } %>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <p class="text-muted small mt-3 text-end">
+    <i class="bi bi-info-circle me-1"></i>Showing <%= drawings.length %> drawing<%= drawings.length !== 1 ? 's' : '' %>.
+  </p>
+<% } %>
+
+<%- include('../partials/footer') %>
