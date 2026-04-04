@@ -33,6 +33,11 @@ body {
   margin-top: auto;
 }
 
+/* Sidebar offset for elements that need to clear the fixed sidebar */
+.sidebar-offset {
+  margin-left: 250px;
+}
+
 /* Responsive sidebar */
 @media (max-width: 768px) {
   .sidebar {
@@ -40,6 +45,10 @@ body {
   }
   
   .main-content {
+    margin-left: 0 !important;
+  }
+
+  .sidebar-offset {
     margin-left: 0 !important;
   }
 }
