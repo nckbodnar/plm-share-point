@@ -4,14 +4,14 @@ import {
   createProject, getProject, listProjects, updateProject, deleteProject,
   getGroupsForProject, addGroupToProject, removeGroupFromProject,
   getLocationsForProject, addLocationToProject, removeLocationFromProject,
-  listDrawings, listGroups, listLocations,
+  listTechDocs, listGroups, listLocations,
 } from '../pgDb';
 
 const router = Router();
 router.use(requireAuth);
 
 // ── List ──────────────────────────────────────────────────────────────────────
-router.get('/', async (req, res) => {
+router.get('/', requireAdmin, async (req, res) => {
   try {
     const projects = await listProjects();
     res.render('projects/index', { title: 'Projects', user: req.user, projects });
@@ -43,6 +43,11 @@ router.post('/', requireAdmin, async (req, res) => {
 });
 
 // ── Detail ────────────────────────────────────────────────────────────────────
+// ── Edit (redirect to detail which has inline editing) ─────────────────────
+router.get('/:id/edit', requireAdmin, (req, res) => {
+  res.redirect(`/projects/${req.params['id']}`);
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const project = await getProject((req.params['id'] as string));
@@ -55,7 +60,7 @@ router.get('/:id', async (req, res) => {
       getLocationsForProject(project.id),
       listGroups(),
       listLocations(),
-      listDrawings({ projectId: project.id }),
+      listTechDocs({ projectId: project.id }),
     ]);
     res.render('projects/detail', {
       title: `Project: ${project.name}`,

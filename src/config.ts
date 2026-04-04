@@ -15,6 +15,9 @@ export const config = {
   adminPassword: optional('ADMIN_PASSWORD', 'ChangeMe123!'),
   databaseUrl: optional('DATABASE_URL', 'postgresql://plm_user:plm_password@localhost:5432/plm_sharepoint'),
   uploadDir: optional('UPLOAD_DIR', './uploads'),
+  // Only set secure cookies when explicitly behind a TLS proxy.
+  // Avoids silently dropping cookies over plain HTTP (e.g. Docker localhost).
+  secureCookies: optional('SECURE_COOKIES', 'false') === 'true',
   plm: {
     useMock: optional('PLM_USE_MOCK', 'true') === 'true',
   },

@@ -10,8 +10,8 @@ import {
 const router = Router();
 router.use(requireAuth);
 
-// ── List ──────────────────────────────────────────────────────────────────────
-router.get('/', async (req, res) => {
+// ── List ──────────────────────────────────────────────────────────────────
+router.get('/', requireAdmin, async (req, res) => {
   try {
     const groups = await listGroupsWithCounts();
     res.render('groups/index', { title: 'Groups', user: req.user, groups });

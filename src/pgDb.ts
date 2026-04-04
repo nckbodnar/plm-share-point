@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import { config } from './config';
-import type { Drawing, DrawingMetadata, Project, DbLocation, Group, User, AuditEntry } from './types';
+import type { TechDoc, TechDocMetadata, Project, DbLocation, Group, User, AuditEntry } from './types';
 
 let pool: Pool | null = null;
 
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS group_projects (
   PRIMARY KEY (group_id, project_id)
 );
 
-CREATE TABLE IF NOT EXISTS drawings (
+CREATE TABLE IF NOT EXISTS tech_docs (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name        TEXT NOT NULL,
   description TEXT,
@@ -85,16 +85,16 @@ CREATE TABLE IF NOT EXISTS drawings (
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS drawing_projects (
-  drawing_id  UUID NOT NULL REFERENCES drawings(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS tech_doc_projects (
+  tech_doc_id UUID NOT NULL REFERENCES tech_docs(id) ON DELETE CASCADE,
   project_id  UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  PRIMARY KEY (drawing_id, project_id)
+  PRIMARY KEY (tech_doc_id, project_id)
 );
 
-CREATE TABLE IF NOT EXISTS drawing_locations (
-  drawing_id  UUID NOT NULL REFERENCES drawings(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS tech_doc_locations (
+  tech_doc_id UUID NOT NULL REFERENCES tech_docs(id) ON DELETE CASCADE,
   location_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
-  PRIMARY KEY (drawing_id, location_id)
+  PRIMARY KEY (tech_doc_id, location_id)
 );
 
 CREATE TABLE IF NOT EXISTS project_locations (
@@ -109,14 +109,14 @@ CREATE TABLE IF NOT EXISTS user_locations (
   PRIMARY KEY (user_email, location_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_drawings_metadata        ON drawings USING GIN (metadata);
-CREATE INDEX IF NOT EXISTS idx_drawings_name            ON drawings (name);
-CREATE INDEX IF NOT EXISTS idx_drawing_projects_drawing ON drawing_projects (drawing_id);
-CREATE INDEX IF NOT EXISTS idx_drawing_projects_project ON drawing_projects (project_id);
+CREATE INDEX IF NOT EXISTS idx_tech_docs_metadata        ON tech_docs USING GIN (metadata);
+CREATE INDEX IF NOT EXISTS idx_tech_docs_name            ON tech_docs (name);
+CREATE INDEX IF NOT EXISTS idx_tech_doc_projects_doc     ON tech_doc_projects (tech_doc_id);
+CREATE INDEX IF NOT EXISTS idx_tech_doc_projects_project ON tech_doc_projects (project_id);
 
 CREATE TABLE IF NOT EXISTS assembly_components (
-  parent_id            UUID NOT NULL REFERENCES drawings(id) ON DELETE CASCADE,
-  child_id             UUID NOT NULL REFERENCES drawings(id) ON DELETE CASCADE,
+  parent_id            UUID NOT NULL REFERENCES tech_docs(id) ON DELETE CASCADE,
+  child_id             UUID NOT NULL REFERENCES tech_docs(id) ON DELETE CASCADE,
   quantity             INTEGER NOT NULL DEFAULT 1,
   reference_designator TEXT,
   PRIMARY KEY (parent_id, child_id)
@@ -131,14 +131,14 @@ export async function initPgDb(): Promise<void> {
 
 // ── Row → domain mappers ──────────────────────────────────────────────────────
 
-function rowToDrawing(row: Record<string, unknown>): Drawing {
+function rowToTechDoc(row: Record<string, unknown>): TechDoc {
   return {
     id: row['id'] as string,
     name: row['name'] as string,
     description: (row['description'] as string | null) ?? undefined,
     revision: row['revision'] as string,
     filePath: (row['file_path'] as string | null) ?? undefined,
-    metadata: (row['metadata'] as DrawingMetadata) ?? {},
+    metadata: (row['metadata'] as TechDocMetadata) ?? {},
     createdAt: (row['created_at'] as Date).toISOString(),
     updatedAt: (row['updated_at'] as Date).toISOString(),
   };
@@ -172,46 +172,46 @@ function rowToGroup(row: Record<string, unknown>): Group {
 
 // ── Drawing CRUD ──────────────────────────────────────────────────────────────
 
-export async function createDrawing(data: {
+export async function createTechDoc(data: {
   name: string;
   description?: string;
   revision?: string;
-  metadata?: DrawingMetadata;
-}): Promise<Drawing> {
+  metadata?: TechDocMetadata;
+}): Promise<TechDoc> {
   const db = getPool();
   const { rows } = await db.query(
-    `INSERT INTO drawings (name, description, revision, metadata)
+    `INSERT INTO tech_docs (name, description, revision, metadata)
      VALUES ($1, $2, $3, $4)
      RETURNING *`,
     [data.name, data.description ?? null, data.revision ?? 'A', JSON.stringify(data.metadata ?? {})],
   );
-  return rowToDrawing(rows[0] as Record<string, unknown>);
+  return rowToTechDoc(rows[0] as Record<string, unknown>);
 }
 
-export async function getDrawing(id: string): Promise<Drawing | null> {
+export async function getTechDoc(id: string): Promise<TechDoc | null> {
   const db = getPool();
-  const { rows } = await db.query('SELECT * FROM drawings WHERE id = $1', [id]);
+  const { rows } = await db.query('SELECT * FROM tech_docs WHERE id = $1', [id]);
   if (rows.length === 0) return null;
-  return rowToDrawing(rows[0] as Record<string, unknown>);
+  return rowToTechDoc(rows[0] as Record<string, unknown>);
 }
 
-export async function listDrawings(filters?: {
+export async function listTechDocs(filters?: {
   projectId?: string;
   locationId?: string;
   search?: string;
   metadata?: Record<string, unknown>;
-}): Promise<Drawing[]> {
+}): Promise<TechDoc[]> {
   const db = getPool();
   const conditions: string[] = [];
   const params: unknown[] = [];
 
   if (filters?.projectId) {
     params.push(filters.projectId);
-    conditions.push(`d.id IN (SELECT drawing_id FROM drawing_projects WHERE project_id = $${params.length})`);
+    conditions.push(`d.id IN (SELECT tech_doc_id FROM tech_doc_projects WHERE project_id = $${params.length})`);
   }
   if (filters?.locationId) {
     params.push(filters.locationId);
-    conditions.push(`d.id IN (SELECT drawing_id FROM drawing_locations WHERE location_id = $${params.length})`);
+    conditions.push(`d.id IN (SELECT tech_doc_id FROM tech_doc_locations WHERE location_id = $${params.length})`);
   }
   if (filters?.search) {
     params.push(`%${filters.search}%`);
@@ -223,11 +223,11 @@ export async function listDrawings(filters?: {
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const { rows } = await db.query(`SELECT d.* FROM drawings d ${where} ORDER BY d.name`, params);
-  return (rows as Record<string, unknown>[]).map(rowToDrawing);
+  const { rows } = await db.query(`SELECT d.* FROM tech_docs d ${where} ORDER BY d.name`, params);
+  return (rows as Record<string, unknown>[]).map(rowToTechDoc);
 }
 
-export async function updateDrawing(id: string, data: Partial<Drawing>): Promise<Drawing | null> {
+export async function updateTechDoc(id: string, data: Partial<TechDoc>): Promise<TechDoc | null> {
   const db = getPool();
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -237,44 +237,42 @@ export async function updateDrawing(id: string, data: Partial<Drawing>): Promise
   if (data.revision !== undefined) { params.push(data.revision); sets.push(`revision = $${params.length}`); }
   if (data.metadata !== undefined) { params.push(JSON.stringify(data.metadata)); sets.push(`metadata = $${params.length}`); }
 
-  if (sets.length === 0) return getDrawing(id);
+  if (sets.length === 0) return getTechDoc(id);
 
   sets.push(`updated_at = NOW()`);
   params.push(id);
   const { rows } = await db.query(
-    `UPDATE drawings SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`,
+    `UPDATE tech_docs SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`,
     params,
   );
   if (rows.length === 0) return null;
-  return rowToDrawing(rows[0] as Record<string, unknown>);
+  return rowToTechDoc(rows[0] as Record<string, unknown>);
 }
 
-export async function deleteDrawing(id: string): Promise<boolean> {
+export async function deleteTechDoc(id: string): Promise<boolean> {
   const db = getPool();
-  const { rowCount } = await db.query('DELETE FROM drawings WHERE id = $1', [id]);
+  const { rowCount } = await db.query('DELETE FROM tech_docs WHERE id = $1', [id]);
   return (rowCount ?? 0) > 0;
 }
 
-export async function setDrawingFilePath(id: string, filePath: string): Promise<void> {
+export async function setTechDocFilePath(id: string, filePath: string): Promise<void> {
   const db = getPool();
-  await db.query('UPDATE drawings SET file_path = $1, updated_at = NOW() WHERE id = $2', [filePath, id]);
+  await db.query('UPDATE tech_docs SET file_path = $1, updated_at = NOW() WHERE id = $2', [filePath, id]);
 }
 
-export async function getDrawingsForUser(userEmail: string): Promise<Drawing[]> {
+export async function getTechDocsForUser(userEmail: string): Promise<TechDoc[]> {
   const db = getPool();
   const { rows } = await db.query(
     `SELECT DISTINCT d.*
-     FROM drawings d
-     JOIN drawing_projects dp ON dp.drawing_id = d.id
+     FROM tech_docs d
+     JOIN tech_doc_projects dp ON dp.tech_doc_id = d.id
      WHERE
-       -- user's group has access to this project
        EXISTS (
          SELECT 1 FROM group_projects gp
          JOIN user_groups ug ON ug.group_id = gp.group_id
          WHERE gp.project_id = dp.project_id AND ug.user_email = $1
        )
        AND
-       -- either no location restriction on this project, or user's location is allowed
        (
          NOT EXISTS (SELECT 1 FROM project_locations pl WHERE pl.project_id = dp.project_id)
          OR EXISTS (
@@ -286,7 +284,7 @@ export async function getDrawingsForUser(userEmail: string): Promise<Drawing[]> 
      ORDER BY d.name`,
     [userEmail],
   );
-  return (rows as Record<string, unknown>[]).map(rowToDrawing);
+  return (rows as Record<string, unknown>[]).map(rowToTechDoc);
 }
 
 // ── Project CRUD ──────────────────────────────────────────────────────────────
@@ -339,27 +337,27 @@ export async function deleteProject(id: string): Promise<boolean> {
   return (rowCount ?? 0) > 0;
 }
 
-export async function addDrawingToProject(drawingId: string, projectId: string): Promise<void> {
+export async function addTechDocToProject(techDocId: string, projectId: string): Promise<void> {
   const db = getPool();
   await db.query(
-    `INSERT INTO drawing_projects (drawing_id, project_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-    [drawingId, projectId],
+    `INSERT INTO tech_doc_projects (tech_doc_id, project_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [techDocId, projectId],
   );
 }
 
-export async function removeDrawingFromProject(drawingId: string, projectId: string): Promise<void> {
+export async function removeTechDocFromProject(techDocId: string, projectId: string): Promise<void> {
   const db = getPool();
-  await db.query('DELETE FROM drawing_projects WHERE drawing_id = $1 AND project_id = $2', [drawingId, projectId]);
+  await db.query('DELETE FROM tech_doc_projects WHERE tech_doc_id = $1 AND project_id = $2', [techDocId, projectId]);
 }
 
-export async function getProjectsForDrawing(drawingId: string): Promise<Project[]> {
+export async function getProjectsForTechDoc(techDocId: string): Promise<Project[]> {
   const db = getPool();
   const { rows } = await db.query(
     `SELECT p.* FROM projects p
-     JOIN drawing_projects dp ON dp.project_id = p.id
-     WHERE dp.drawing_id = $1
+     JOIN tech_doc_projects dp ON dp.project_id = p.id
+     WHERE dp.tech_doc_id = $1
      ORDER BY p.name`,
-    [drawingId],
+    [techDocId],
   );
   return (rows as Record<string, unknown>[]).map(rowToProject);
 }
@@ -401,30 +399,30 @@ export async function deleteLocation(id: string): Promise<boolean> {
   return (rowCount ?? 0) > 0;
 }
 
-export async function addDrawingToLocation(drawingId: string, locationId: string): Promise<void> {
+export async function addTechDocToLocation(techDocId: string, locationId: string): Promise<void> {
   const db = getPool();
   await db.query(
-    `INSERT INTO drawing_locations (drawing_id, location_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-    [drawingId, locationId],
+    `INSERT INTO tech_doc_locations (tech_doc_id, location_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [techDocId, locationId],
   );
 }
 
-export async function removeDrawingFromLocation(drawingId: string, locationId: string): Promise<void> {
+export async function removeTechDocFromLocation(techDocId: string, locationId: string): Promise<void> {
   const db = getPool();
   await db.query(
-    'DELETE FROM drawing_locations WHERE drawing_id = $1 AND location_id = $2',
-    [drawingId, locationId],
+    'DELETE FROM tech_doc_locations WHERE tech_doc_id = $1 AND location_id = $2',
+    [techDocId, locationId],
   );
 }
 
-export async function getLocationsForDrawing(drawingId: string): Promise<DbLocation[]> {
+export async function getLocationsForTechDoc(techDocId: string): Promise<DbLocation[]> {
   const db = getPool();
   const { rows } = await db.query(
     `SELECT l.* FROM locations l
-     JOIN drawing_locations dl ON dl.location_id = l.id
-     WHERE dl.drawing_id = $1
+     JOIN tech_doc_locations dl ON dl.location_id = l.id
+     WHERE dl.tech_doc_id = $1
      ORDER BY l.name`,
-    [drawingId],
+    [techDocId],
   );
   return (rows as Record<string, unknown>[]).map(rowToLocation);
 }
@@ -737,18 +735,18 @@ export async function getAuditLog(limit = 500): Promise<AuditEntry[]> {
 
 // ── Assembly components ───────────────────────────────────────────────────────
 
-export async function getAssemblyComponents(parentId: string): Promise<Array<Drawing & { quantity: number; referenceDesignator?: string }>> {
+export async function getAssemblyComponents(parentId: string): Promise<Array<TechDoc & { quantity: number; referenceDesignator?: string }>> {
   const db = getPool();
   const { rows } = await db.query(
     `SELECT d.*, ac.quantity, ac.reference_designator
-     FROM drawings d
+     FROM tech_docs d
      JOIN assembly_components ac ON ac.child_id = d.id
      WHERE ac.parent_id = $1
      ORDER BY d.name`,
     [parentId],
   );
   return (rows as Record<string, unknown>[]).map((row) => ({
-    ...rowToDrawing(row),
+    ...rowToTechDoc(row),
     quantity: row['quantity'] as number,
     referenceDesignator: (row['reference_designator'] as string | null) ?? undefined,
   }));
@@ -768,14 +766,14 @@ export async function removeComponentFromAssembly(parentId: string, childId: str
   await db.query('DELETE FROM assembly_components WHERE parent_id = $1 AND child_id = $2', [parentId, childId]);
 }
 
-export async function listAssemblies(): Promise<Drawing[]> {
+export async function listAssemblies(): Promise<TechDoc[]> {
   const db = getPool();
   const { rows } = await db.query(
-    `SELECT DISTINCT d.* FROM drawings d
+    `SELECT DISTINCT d.* FROM tech_docs d
      WHERE EXISTS (SELECT 1 FROM assembly_components ac WHERE ac.parent_id = d.id)
      ORDER BY d.name`,
   );
-  return (rows as Record<string, unknown>[]).map(rowToDrawing);
+  return (rows as Record<string, unknown>[]).map(rowToTechDoc);
 }
 
 // ── Seed default data ─────────────────────────────────────────────────────────
@@ -810,11 +808,11 @@ async function seedDefaultData(): Promise<void> {
     `);
   }
 
-  const { rows: dRows } = await db.query('SELECT COUNT(*) as count FROM drawings');
+  const { rows: dRows } = await db.query('SELECT COUNT(*) as count FROM tech_docs');
   if (parseInt((dRows[0] as { count: string }).count, 10) === 0) {
     await db.query(`
-      INSERT INTO drawings (name, revision, description) VALUES
-        ('Engine Block Drawing', 'v1.2', 'Technical drawing for main engine block assembly'),
+      INSERT INTO tech_docs (name, revision, description) VALUES
+        ('Engine Block', 'v1.2', 'Technical drawing for main engine block assembly'),
         ('Transmission Housing', 'v2.0', 'Housing assembly for automatic transmission'),
         ('Brake Assembly', 'v1.5', 'Complete brake system assembly drawing')
     `);

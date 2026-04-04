@@ -5,8 +5,8 @@ import { createLocation, getLocation, listLocations, updateLocation, deleteLocat
 const router = Router();
 router.use(requireAuth);
 
-// ── List ──────────────────────────────────────────────────────────────────────
-router.get('/', async (req, res) => {
+// ── List ──────────────────────────────────────────────────────────────────
+router.get('/', requireAdmin, async (req, res) => {
   try {
     const locations = await listLocations();
     res.render('locations/index', { title: 'Locations', user: req.user, locations });

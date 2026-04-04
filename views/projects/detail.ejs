@@ -29,7 +29,7 @@
       </div>
       <div class="card-body">
         <% if (!drawings || drawings.length === 0) { %>
-          <p class="text-muted small mb-0">No drawings assigned to this project.</p>
+          <p class="text-muted small mb-0">No parts assigned to this project.</p>
         <% } else { %>
           <div class="table-responsive">
             <table class="table table-sm table-hover mb-0">
@@ -37,9 +37,9 @@
               <tbody>
                 <% drawings.forEach(function(d) { %>
                   <tr>
-                    <td><a href="/drawings/<%= d.id %>" class="text-decoration-none"><%= d.name %></a></td>
+                    <td><a href="/parts/<%= d.id %>" class="text-decoration-none"><%= d.name %></a></td>
                     <td><span class="badge bg-secondary font-monospace"><%= d.revision %></span></td>
-                    <td><a href="/drawings/<%= d.id %>" class="btn btn-outline-primary btn-sm py-0">View</a></td>
+                    <td><a href="/parts/<%= d.id %>" class="btn btn-outline-primary btn-sm py-0">View</a></td>
                   </tr>
                 <% }); %>
               </tbody>

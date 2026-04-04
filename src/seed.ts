@@ -3,19 +3,19 @@ import path from 'path';
 import { config } from './config';
 import {
   initPgDb,
-  listDrawings,
+  listTechDocs,
   listProjects,
   listLocations,
   listGroups,
-  createDrawing,
+  createTechDoc,
   createProject,
   createLocation,
   createGroup,
-  addDrawingToProject,
-  addDrawingToLocation,
+  addTechDocToProject,
+  addTechDocToLocation,
   addGroupToProject,
   addUserToGroup,
-  setDrawingFilePath,
+  setTechDocFilePath,
 } from './pgDb';
 
 function buildTestPdf(title: string): Buffer {
@@ -196,8 +196,8 @@ async function seed(): Promise<void> {
     },
   ];
 
-  const existingDrawings = await listDrawings();
-  const existingDrawingNames = new Set(existingDrawings.map((d) => d.name));
+  const existingDrawings = await listTechDocs();
+  const existingDrawingNames = new Set(existingDrawings.map((d: { name: string }) => d.name));
 
   let _createdDrawingsCount = 0;
 
@@ -206,7 +206,7 @@ async function seed(): Promise<void> {
       continue;
     }
 
-    const drawing = await createDrawing({
+    const drawing = await createTechDoc({
       name: def.name,
       description: def.description,
       revision: def.revision,
@@ -218,13 +218,13 @@ async function seed(): Promise<void> {
     const fileName = `${drawing.id}.pdf`;
     const filePath = path.join(uploadDir, fileName);
     fs.writeFileSync(filePath, pdfBuffer);
-    await setDrawingFilePath(drawing.id, filePath);
+    await setTechDocFilePath(drawing.id, filePath);
 
     // Link projects
     for (const projectName of def.projects) {
       const projectId = projectMap[projectName];
       if (projectId) {
-        await addDrawingToProject(drawing.id, projectId);
+        await addTechDocToProject(drawing.id, projectId);
       }
     }
 
@@ -232,7 +232,7 @@ async function seed(): Promise<void> {
     for (const locationName of def.locations) {
       const locationId = locationMap[locationName];
       if (locationId) {
-        await addDrawingToLocation(drawing.id, locationId);
+        await addTechDocToLocation(drawing.id, locationId);
       }
     }
 
@@ -271,13 +271,13 @@ async function seed(): Promise<void> {
   }
 
   // --- Summary ---
-  const finalDrawings = await listDrawings();
+  const finalDrawings = await listTechDocs();
   const finalProjects = await listProjects();
   const finalLocations = await listLocations();
   const finalGroups = await listGroups();
 
   console.log(
-    `Seeded ${finalDrawings.length} drawings, ${finalProjects.length} projects, ${finalLocations.length} locations, ${finalGroups.length} groups`
+    `Seeded ${finalDrawings.length} parts, ${finalProjects.length} projects, ${finalLocations.length} locations, ${finalGroups.length} groups`
   );
 }
 

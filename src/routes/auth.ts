@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import { findUserByEmail, createUser } from '../pgDb';
 import { signToken } from '../middleware/auth';
+import { config } from '../config';
 
 const router = Router();
 
@@ -106,7 +107,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
   res.cookie('auth_token', token, {
     httpOnly: true,
-    secure: process.env['NODE_ENV'] === 'production',
+    secure: config.secureCookies,
     sameSite: 'lax',
     maxAge: 8 * 60 * 60 * 1000, // 8 hours
   });

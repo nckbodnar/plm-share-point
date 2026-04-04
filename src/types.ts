@@ -133,13 +133,13 @@ export interface AuditEntry {
   accessedAt: string;
 }
 
-export interface Drawing {
+export interface TechDoc {
   id: string;
   name: string;
   description?: string;
   revision: string;
   filePath?: string;
-  metadata: DrawingMetadata;
+  metadata: TechDocMetadata;
   createdAt: string;
   updatedAt: string;
   // Populated via joins:
@@ -147,7 +147,7 @@ export interface Drawing {
   locations?: DbLocation[];
 }
 
-export interface DrawingMetadata {
+export interface TechDocMetadata {
   author?: string;
   version?: string;
   tags?: string[];

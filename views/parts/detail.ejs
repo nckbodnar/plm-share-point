@@ -1,143 +1,267 @@
-<%- include('../partials/header', { title, user }) %>
+﻿<%- include('../partials/header', { title, user }) %>
 
 <nav aria-label="breadcrumb" class="mb-3">
   <ol class="breadcrumb">
-    <li class="breadcrumb-item"><a href="/parts">Released Parts</a></li>
-    <li class="breadcrumb-item active" aria-current="page"><%= part.partNumber %></li>
+    <li class="breadcrumb-item"><a href="/drawings">Parts</a></li>
+    <li class="breadcrumb-item active" aria-current="page"><%= drawing.name %></li>
   </ol>
 </nav>
 
 <div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
   <div>
     <h1 class="h3 mb-1">
-      <span class="font-monospace text-secondary me-2"><%= part.partNumber %></span>
-      <%= part.name %>
+      <%= drawing.name %>
+      <% if (drawing.revision) { %>
+        <span class="badge bg-secondary font-monospace ms-2 fs-6"><%= drawing.revision %></span>
+      <% } %>
     </h1>
-    <% if (part.description) { %>
-      <p class="text-muted mb-2"><%= part.description %></p>
+    <% if (drawing.description) { %>
+      <p class="text-muted mb-0"><%= drawing.description %></p>
     <% } %>
-    <span class="badge bg-success fs-6">
-      <i class="bi bi-check-circle me-1"></i><%= part.lifecycleState %>
-    </span>
   </div>
-  <a href="/parts" class="btn btn-outline-secondary btn-sm align-self-start">
+  <a href="/drawings" class="btn btn-outline-secondary btn-sm align-self-start">
     <i class="bi bi-arrow-left me-1"></i>Back to list
   </a>
 </div>
 
-<div class="row g-4">
+<div class="row g-3 mx-n3 mx-lg-n4">
 
-  <!-- Latest Released Revision -->
-  <div class="col-12">
-    <div class="card border-success shadow-sm">
-      <div class="card-header bg-success text-white d-flex align-items-center gap-2">
-        <i class="bi bi-star-fill"></i>
-        <strong>Latest Released Revision: <%= part.latestRevision.revision %></strong>
-        <span class="badge bg-white text-success ms-1">Current</span>
+  <!-- PDF Viewer "” main column (left, 8/12) -->
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center justify-content-between gap-2">
+        <span class="d-flex align-items-center gap-2">
+          <i class="bi bi-file-earmark-pdf text-danger"></i>
+          <strong>Part PDF</strong>
+        </span>
+        <% if (drawing.filePath) { %>
+          <a href="/parts/<%= drawing.id %>/download" class="btn btn-outline-primary btn-sm" download>
+            <i class="bi bi-download me-1"></i>Download
+          </a>
+        <% } %>
       </div>
-      <div class="card-body">
-        <div class="row g-3 mb-3">
-          <div class="col-sm-4">
-            <div class="text-muted small">Release Date</div>
-            <div class="fw-semibold"><%= new Date(part.latestRevision.releaseDate).toLocaleDateString('en-GB', { year:'numeric', month:'long', day:'numeric' }) %></div>
-          </div>
-          <% if (part.latestRevision.releasedBy) { %>
-          <div class="col-sm-4">
-            <div class="text-muted small">Released By</div>
-            <div class="fw-semibold"><%= part.latestRevision.releasedBy %></div>
-          </div>
-          <% } %>
-          <div class="col-sm-4">
-            <div class="text-muted small">Lifecycle State</div>
-            <div>
-              <span class="badge bg-success"><%= part.latestRevision.lifecycleState %></span>
-            </div>
-          </div>
-        </div>
-
-        <% if (part.latestRevision.documentId) { %>
-          <div class="alert alert-info d-flex align-items-start gap-2 mb-3" role="note">
-            <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
-            <span class="small">
-              The specification document is displayed inline below.
-              <strong>Bulk download is not available.</strong>
-            </span>
-          </div>
-          <div class="ratio ratio-4x3 border rounded doc-viewer mb-2">
-            <iframe
-              src="/parts/<%= part.id %>/documents/<%= part.latestRevision.documentId %>"
-              title="Specification: <%= part.partNumber %> Rev <%= part.latestRevision.revision %>"
-              class="rounded"
-              allowfullscreen
-              sandbox="allow-same-origin allow-scripts"
-            ></iframe>
-          </div>
-          <p class="text-muted small">
-            <i class="bi bi-file-earmark-text me-1"></i>
-            <%= part.latestRevision.specificationFileName || 'Specification document' %>
-          </p>
+      <div class="card-body p-0">
+        <% if (drawing.filePath) { %>
+          <iframe src="/parts/<%= drawing.id %>/download"
+                  style="width:100%; height:90vh; min-height:600px; border:none; display:block;"
+                  title="Part PDF: <%= drawing.name %>"></iframe>
         <% } else { %>
-          <div class="text-muted small fst-italic">No specification document attached to this revision.</div>
+          <div class="d-flex flex-column align-items-center justify-content-center text-muted py-5" style="min-height:300px;">
+            <i class="bi bi-file-earmark-x display-4 mb-3"></i>
+            <p class="mb-0">No PDF attached.</p>
+          </div>
+        <% } %>
+        <% if (user && user.isAdmin) { %>
+          <div class="p-3 border-top bg-light">
+            <div class="text-muted small mb-2 fw-semibold">Upload PDF</div>
+            <form method="POST" action="/parts/<%= drawing.id %>/upload?_csrf=<%= encodeURIComponent(csrfToken) %>" enctype="multipart/form-data" class="d-flex gap-2 align-items-center flex-wrap">
+              <input type="file" class="form-control form-control-sm" name="pdf" accept="application/pdf" required />
+              <button type="submit" class="btn btn-primary btn-sm text-nowrap">
+                <i class="bi bi-upload me-1"></i>Upload
+              </button>
+            </form>
+          </div>
         <% } %>
       </div>
     </div>
   </div>
 
-  <% if (part.previousRevision) { %>
-  <!-- Previous Released Revision -->
-  <div class="col-12">
-    <div class="card border-secondary shadow-sm">
-      <div class="card-header bg-light d-flex align-items-center gap-2">
-        <i class="bi bi-clock-history text-secondary"></i>
-        <strong>Previous Released Revision: <%= part.previousRevision.revision %></strong>
+  <!-- Sidebar "” right column (4/12) -->
+  <div class="col-12 col-lg-4 d-flex flex-column gap-3">
+
+    <!-- Metadata -->
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-tag text-primary"></i>
+        <strong>Metadata</strong>
       </div>
       <div class="card-body">
-        <div class="row g-3 mb-3">
-          <div class="col-sm-4">
-            <div class="text-muted small">Release Date</div>
-            <div class="fw-semibold"><%= new Date(part.previousRevision.releaseDate).toLocaleDateString('en-GB', { year:'numeric', month:'long', day:'numeric' }) %></div>
-          </div>
-          <% if (part.previousRevision.releasedBy) { %>
-          <div class="col-sm-4">
-            <div class="text-muted small">Released By</div>
-            <div class="fw-semibold"><%= part.previousRevision.releasedBy %></div>
-          </div>
-          <% } %>
-          <div class="col-sm-4">
-            <div class="text-muted small">Lifecycle State</div>
-            <div>
-              <span class="badge bg-secondary"><%= part.previousRevision.lifecycleState %></span>
+        <% if (drawing.metadata && Object.keys(drawing.metadata).length) { %>
+          <% if (drawing.metadata.author) { %>
+            <div class="mb-2">
+              <div class="text-muted small">Author</div>
+              <div class="fw-semibold"><%= drawing.metadata.author %></div>
             </div>
-          </div>
-        </div>
-
-        <% if (part.previousRevision.documentId) { %>
-          <div class="ratio ratio-4x3 border rounded doc-viewer mb-2">
-            <iframe
-              src="/parts/<%= part.id %>/documents/<%= part.previousRevision.documentId %>"
-              title="Specification: <%= part.partNumber %> Rev <%= part.previousRevision.revision %>"
-              class="rounded"
-              allowfullscreen
-              sandbox="allow-same-origin allow-scripts"
-            ></iframe>
-          </div>
-          <p class="text-muted small">
-            <i class="bi bi-file-earmark-text me-1"></i>
-            <%= part.previousRevision.specificationFileName || 'Specification document' %>
-          </p>
+          <% } %>
+          <% if (drawing.metadata.version) { %>
+            <div class="mb-2">
+              <div class="text-muted small">Version</div>
+              <div class="fw-semibold"><%= drawing.metadata.version %></div>
+            </div>
+          <% } %>
+          <% if (drawing.metadata.tags && drawing.metadata.tags.length) { %>
+            <div class="mb-2">
+              <div class="text-muted small mb-1">Tags</div>
+              <% drawing.metadata.tags.forEach(function(tag) { %>
+                <span class="badge bg-info text-dark me-1 mb-1"><%= tag %></span>
+              <% }); %>
+            </div>
+          <% } %>
+          <%
+            const reserved = ['author', 'version', 'tags'];
+            const customKeys = Object.keys(drawing.metadata).filter(function(k) { return reserved.indexOf(k) === -1; });
+          %>
+          <% customKeys.forEach(function(key) { %>
+            <div class="mb-2">
+              <div class="text-muted small"><%= key %></div>
+              <div class="fw-semibold"><%= JSON.stringify(drawing.metadata[key]) %></div>
+            </div>
+          <% }); %>
         <% } else { %>
-          <div class="text-muted small fst-italic">No specification document attached to this revision.</div>
+          <p class="text-muted small mb-0">No metadata.</p>
         <% } %>
       </div>
     </div>
-  </div>
-  <% } %>
+
+    <!-- Assigned Projects -->
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-folder text-primary"></i>
+        <strong>Assigned Projects</strong>
+      </div>
+      <div class="card-body">
+        <% if (drawing.projects && drawing.projects.length) { %>
+          <div class="d-flex flex-wrap gap-2 mb-3">
+            <% drawing.projects.forEach(function(p) { %>
+              <span class="badge bg-primary d-inline-flex align-items-center gap-1 fs-6 fw-normal px-2 py-1">
+                <i class="bi bi-folder2-open"></i>
+                <a href="/projects/<%= p.id %>" class="text-white text-decoration-none"><%= p.name %></a>
+                <% if (user && user.isAdmin) { %>
+                  <button type="button" class="btn-close btn-close-white ms-1" style="font-size:0.55rem;"
+                          data-url="/parts/<%= drawing.id %>/projects/<%= p.id %>"
+                          data-csrf="<%= csrfToken %>"
+                          onclick="removeAssignment(this.dataset.url, this.dataset.csrf, ()=>location.reload())"
+                          title="Remove" aria-label="Remove"></button>
+                <% } %>
+              </span>
+            <% }); %>
+          </div>
+        <% } else { %>
+          <p class="text-muted small mb-3">No projects assigned yet.</p>
+        <% } %>
+        <% if (user && user.isAdmin) { %>
+          <form method="POST" action="/parts/<%= drawing.id %>/projects" class="d-flex gap-2 align-items-center">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <select class="form-select form-select-sm" name="projectId" required>
+              <option value="" disabled selected>Select project to add…</option>
+              <% if (allProjects) { allProjects.forEach(function(p) { %>
+                <% const already = drawing.projects && drawing.projects.some(function(x){ return x.id === p.id; }); %>
+                <% if (!already) { %>
+                  <option value="<%= p.id %>"><%= p.name %></option>
+                <% } %>
+              <% }); } %>
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm text-nowrap">
+              <i class="bi bi-plus-lg"></i> Add
+            </button>
+          </form>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Assigned Locations -->
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-geo-alt text-primary"></i>
+        <strong>Assigned Locations</strong>
+      </div>
+      <div class="card-body">
+        <% if (drawing.locations && drawing.locations.length) { %>
+          <div class="d-flex flex-wrap gap-2 mb-3">
+            <% drawing.locations.forEach(function(l) { %>
+              <span class="badge bg-success d-inline-flex align-items-center gap-1 fs-6 fw-normal px-2 py-1">
+                <i class="bi bi-geo-alt-fill"></i>
+                <%= l.name %>
+                <% if (user && user.isAdmin) { %>
+                  <button type="button" class="btn-close btn-close-white ms-1" style="font-size:0.55rem;"
+                          data-url="/parts/<%= drawing.id %>/locations/<%= l.id %>"
+                          data-csrf="<%= csrfToken %>"
+                          onclick="removeAssignment(this.dataset.url, this.dataset.csrf, ()=>location.reload())"
+                          title="Remove" aria-label="Remove"></button>
+                <% } %>
+              </span>
+            <% }); %>
+          </div>
+        <% } else { %>
+          <p class="text-muted small mb-3">No locations assigned yet.</p>
+        <% } %>
+        <% if (user && user.isAdmin) { %>
+          <form method="POST" action="/parts/<%= drawing.id %>/locations" class="d-flex gap-2 align-items-center">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <select class="form-select form-select-sm" name="locationId" required>
+              <option value="" disabled selected>Select location to add…</option>
+              <% if (allLocations) { allLocations.forEach(function(l) { %>
+                <% const already = drawing.locations && drawing.locations.some(function(x){ return x.id === l.id; }); %>
+                <% if (!already) { %>
+                  <option value="<%= l.id %>"><%= l.name %></option>
+                <% } %>
+              <% }); } %>
+            </select>
+            <button type="submit" class="btn btn-success btn-sm text-nowrap">
+              <i class="bi bi-plus-lg"></i> Add
+            </button>
+          </form>
+        <% } %>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
 
 </div>
 
+<!-- Admin: Edit & Delete -->
+<% if (user && user.isAdmin) { %>
+  <div class="row g-4 mt-0">
+    <div class="col-12">
+      <div class="card shadow-sm border-warning">
+        <div class="card-header bg-warning bg-opacity-10 d-flex align-items-center gap-2">
+          <i class="bi bi-pencil-square text-warning"></i>
+          <strong>Edit Part</strong>
+        </div>
+        <div class="card-body">
+          <form id="editDrawingForm">
+            <div class="row g-3">
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="edit-name">Name</label>
+                <input type="text" class="form-control form-control-sm" id="edit-name" name="name" value="<%= drawing.name %>" required />
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="edit-revision">Revision</label>
+                <input type="text" class="form-control form-control-sm" id="edit-revision" name="revision" value="<%= drawing.revision || '' %>" />
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="edit-description">Description</label>
+                <input type="text" class="form-control form-control-sm" id="edit-description" name="description" value="<%= drawing.description || '' %>" />
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="edit-metadata">Metadata (JSON)</label>
+                <textarea class="form-control form-control-sm font-monospace" id="edit-metadata" name="metadata" rows="4"><%= JSON.stringify(drawing.metadata || {}, null, 2) %></textarea>
+              </div>
+              <div class="col-auto d-flex gap-2">
+                <button type="button" class="btn btn-warning btn-sm"
+                        id="saveDrawingBtn"
+                        data-url="/parts/<%= drawing.id %>"
+                        data-csrf="<%= csrfToken %>"
+                        onclick="submitEdit(this.dataset.url, 'editDrawingForm', this.dataset.csrf)">
+                  <i class="bi bi-save me-1"></i>Save Changes
+                </button>
+                <button type="button" class="btn btn-danger btn-sm"
+                        data-url="/parts/<%= drawing.id %>"
+                        data-csrf="<%= csrfToken %>"
+                        onclick="deleteEntity(this.dataset.url, this.dataset.csrf, '/drawings')">
+                  <i class="bi bi-trash me-1"></i>Delete Part
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+<% } %>
+
 <div class="mt-4 small text-muted">
-  <i class="bi bi-clock me-1"></i>
-  Last updated in PLM: <%= new Date(part.updatedAt).toLocaleString() %>
+  <i class="bi bi-clock me-1"></i>Last updated: <%= new Date(drawing.updatedAt || drawing.createdAt).toLocaleString() %>
 </div>
 
 <%- include('../partials/footer') %>

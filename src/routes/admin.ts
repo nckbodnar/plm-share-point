@@ -8,7 +8,7 @@ import {
   listGroups, listLocations, getGroupsForUser, getLocationsForUser,
   removeAllGroupsFromUser, addUserToGroup,
   removeAllLocationsFromUser, addLocationToUser,
-  listDrawings, listProjects,
+  listTechDocs, listProjects,
 } from '../pgDb';
 
 const router = Router();
@@ -33,7 +33,7 @@ router.get('/dashboard', async (req, res) => {
     const [pendingUsers, allUsersRaw, drawings, projects, groups] = await Promise.all([
       getPendingUsers(),
       getAllUsers(),
-      listDrawings(),
+      listTechDocs(),
       listProjects(),
       listGroups(),
     ]);

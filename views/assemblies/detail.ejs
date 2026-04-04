@@ -54,9 +54,9 @@
       <form method="POST" action="/assemblies/<%= assembly.id %>/components" class="row g-2 align-items-end">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
         <div class="col-md-5">
-          <label class="form-label small">Child Drawing</label>
+          <label class="form-label small">Child Part</label>
           <select name="childId" class="form-select form-select-sm" required>
-            <option value="">Select drawing…</option>
+            <option value="">Select part…</option>
             <% allDrawings.forEach(function(d) { %>
               <% if (d.id !== assembly.id) { %>
                 <option value="<%= d.id %>"><%= d.name %> (Rev <%= d.revision %>)</option>
@@ -101,7 +101,7 @@
           <% components.forEach(function(c) { %>
           <tr>
             <td class="font-monospace small"><%= c.referenceDesignator || '–' %></td>
-            <td><a href="/drawings/<%= c.id %>" class="small"><%= c.name %></a></td>
+            <td><a href="/parts/<%= c.id %>" class="small"><%= c.name %></a></td>
             <td class="small"><%= c.revision %></td>
             <td class="small text-center"><%= c.quantity %></td>
             <td>
@@ -192,7 +192,7 @@
 
       function onNodeClick(_evt, node) {
         if (!node.data.isRoot && node.data.partId) {
-          window.location.href = '/drawings/' + node.data.partId;
+          window.location.href = '/parts/' + node.data.partId;
         }
       }
 

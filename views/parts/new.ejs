@@ -1,0 +1,50 @@
+<%- include('../partials/header', { title, user }) %>
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/parts">Parts</a></li>
+    <li class="breadcrumb-item active">New Part</li>
+  </ol>
+</nav>
+
+<div class="mb-4">
+  <h1 class="h3 mb-1"><i class="bi bi-plus-circle me-2 text-primary"></i>New Part</h1>
+  <p class="text-muted mb-0 small">Create a new technical part entry.</p>
+</div>
+
+<% if (error) { %>
+  <div class="alert alert-danger"><%= error %></div>
+<% } %>
+
+<div class="card shadow-sm" style="max-width:600px;">
+  <div class="card-body">
+    <form method="POST" action="/parts">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <div class="mb-3">
+        <label class="form-label fw-semibold" for="name">Name <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" id="name" name="name" required autofocus />
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold" for="revision">Revision</label>
+        <input type="text" class="form-control" id="revision" name="revision" placeholder="A" />
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold" for="description">Description</label>
+        <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold" for="metadata">Metadata (JSON)</label>
+        <textarea class="form-control font-monospace" id="metadata" name="metadata" rows="4" placeholder='{"author":"","version":"","tags":[]}'>{}</textarea>
+        <div class="form-text">Optional. Enter valid JSON with author, version, tags, etc.</div>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-check-lg me-1"></i>Create Part
+        </button>
+        <a href="/parts" class="btn btn-outline-secondary btn-sm">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>
