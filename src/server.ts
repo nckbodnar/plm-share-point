@@ -15,7 +15,7 @@ import drawingsRouter from './routes/drawings';
 import projectsRouter from './routes/projects';
 import locationsRouter from './routes/locations';
 import groupsRouter from './routes/groups';
-import { initPgDb } from './pgDb';
+import { getPool } from './pgDb'; // ensure PostgreSQL pool is initialised
 
 const app = express();
 
@@ -64,12 +64,9 @@ app.use(cookieParser(config.sessionSecret));
 // ---------------------------------------------------------------------------
 const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => config.sessionSecret,
-  // Use a stable session identifier for development
-  getSessionIdentifier: (req) => {
-    // For stateless JWT auth, use a combination of IP and user agent
-    const identifier = `${req.ip || 'unknown'}-${req.get('user-agent') || 'unknown'}`;
-    return identifier;
-  },
+  // For stateless JWT auth use a fixed identifier – the CSRF secret already
+  // provides the required entropy; tying to IP breaks behind Docker NAT.
+  getSessionIdentifier: () => 'app',
   cookieName: '_csrf',
   cookieOptions: {
     httpOnly: true,
@@ -91,7 +88,7 @@ app.use(doubleCsrfProtection);
 
 // Make CSRF token available to all EJS views
 app.use((req, res, next) => {
-  res.locals['csrfToken'] = generateCsrfToken(req, res, { overwrite: true });
+  res.locals['csrfToken'] = generateCsrfToken(req, res);
   next();
 });
 
@@ -176,14 +173,12 @@ app.use(
 // Start
 // ---------------------------------------------------------------------------
 if (require.main === module) {
-  initPgDb().then(() => {
-    app.listen(config.port, () => {
-      console.log(`PLM SharePoint running on http://localhost:${config.port}`);
-      console.log(`Mode: ${config.nodeEnv}`);
-    });
-  }).catch((err) => {
-    console.error('[server] Failed to initialise database:', err);
-    process.exit(1);
+  // Ensure PostgreSQL pool is initialised before accepting requests
+  getPool();
+
+  app.listen(config.port, () => {
+    console.log(`PLM SharePoint running on http://localhost:${config.port}`);
+    console.log(`Mode: ${config.nodeEnv} | PLM mock: ${config.plm.useMock}`);
   });
 }
 

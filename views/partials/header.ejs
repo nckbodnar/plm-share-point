@@ -93,6 +93,7 @@
   <div class="container-fluid py-4">
 <% } else { %>
 <!-- Top navbar for non-authenticated users -->
+<% if (title !== 'Login') { %>
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
   <div class="container-fluid">
     <a class="navbar-brand d-flex align-items-center gap-2" href="/">
@@ -107,4 +108,7 @@
 </nav>
 
 <main class="container py-4 flex-grow-1">
+<% } else { %>
+<main class="flex-grow-1">
+<% } %>
 <% } %>
