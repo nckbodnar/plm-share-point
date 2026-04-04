@@ -24,17 +24,59 @@
   </a>
 </div>
 
-<div class="row g-4">
+<div class="row g-3 mx-n3 mx-lg-n4">
 
-  <!-- Metadata -->
-  <div class="col-12 col-lg-4">
-    <div class="card shadow-sm h-100">
+  <!-- PDF Viewer — main column (left, 8/12) -->
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center justify-content-between gap-2">
+        <span class="d-flex align-items-center gap-2">
+          <i class="bi bi-file-earmark-pdf text-danger"></i>
+          <strong>Drawing PDF</strong>
+        </span>
+        <% if (drawing.filePath) { %>
+          <a href="/drawings/<%= drawing.id %>/download" class="btn btn-outline-primary btn-sm" download>
+            <i class="bi bi-download me-1"></i>Download
+          </a>
+        <% } %>
+      </div>
+      <div class="card-body p-0">
+        <% if (drawing.filePath) { %>
+          <iframe src="/drawings/<%= drawing.id %>/download"
+                  style="width:100%; height:90vh; min-height:600px; border:none; display:block;"
+                  title="Drawing PDF: <%= drawing.name %>"></iframe>
+        <% } else { %>
+          <div class="d-flex flex-column align-items-center justify-content-center text-muted py-5" style="min-height:300px;">
+            <i class="bi bi-file-earmark-x display-4 mb-3"></i>
+            <p class="mb-0">No PDF attached.</p>
+          </div>
+        <% } %>
+        <% if (user && user.isAdmin) { %>
+          <div class="p-3 border-top bg-light">
+            <div class="text-muted small mb-2 fw-semibold">Upload PDF</div>
+            <form method="POST" action="/drawings/<%= drawing.id %>/upload?_csrf=<%= encodeURIComponent(csrfToken) %>" enctype="multipart/form-data" class="d-flex gap-2 align-items-center flex-wrap">
+              <input type="file" class="form-control form-control-sm" name="pdf" accept="application/pdf" required />
+              <button type="submit" class="btn btn-primary btn-sm text-nowrap">
+                <i class="bi bi-upload me-1"></i>Upload
+              </button>
+            </form>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar — right column (4/12) -->
+  <div class="col-12 col-lg-4 d-flex flex-column gap-3">
+
+    <!-- Metadata -->
+    <div class="card shadow-sm">
       <div class="card-header d-flex align-items-center gap-2">
         <i class="bi bi-tag text-primary"></i>
         <strong>Metadata</strong>
       </div>
       <div class="card-body">
-        <% if (drawing.metadata) { %>
+        <% if (drawing.metadata && Object.keys(drawing.metadata).length) { %>
           <% if (drawing.metadata.author) { %>
             <div class="mb-2">
               <div class="text-muted small">Author</div>
@@ -70,11 +112,9 @@
         <% } %>
       </div>
     </div>
-  </div>
 
-  <!-- Projects & Locations -->
-  <div class="col-12 col-lg-4">
-    <div class="card shadow-sm mb-3">
+    <!-- Assigned Projects -->
+    <div class="card shadow-sm">
       <div class="card-header d-flex align-items-center gap-2">
         <i class="bi bi-folder text-primary"></i>
         <strong>Assigned Projects</strong>
@@ -120,6 +160,7 @@
       </div>
     </div>
 
+    <!-- Assigned Locations -->
     <div class="card shadow-sm">
       <div class="card-header d-flex align-items-center gap-2">
         <i class="bi bi-geo-alt text-primary"></i>
@@ -163,44 +204,8 @@
         <% } %>
       </div>
     </div>
-  </div>
 
-  <!-- PDF Viewer -->
-  <div class="col-12 col-lg-4">
-    <div class="card shadow-sm">
-      <div class="card-header d-flex align-items-center gap-2">
-        <i class="bi bi-file-earmark-pdf text-danger"></i>
-        <strong>Drawing PDF</strong>
-      </div>
-      <div class="card-body">
-        <% if (drawing.filePath) { %>
-          <iframe src="/drawings/<%= drawing.id %>/download"
-                  style="width:100%;height:600px;border:1px solid #ccc;"
-                  title="Drawing PDF: <%= drawing.name %>"></iframe>
-          <div class="mt-2">
-            <a href="/drawings/<%= drawing.id %>/download" class="btn btn-outline-primary btn-sm" download>
-              <i class="bi bi-download me-1"></i>Download PDF
-            </a>
-          </div>
-        <% } else { %>
-          <div class="text-muted small fst-italic">
-            <i class="bi bi-file-earmark-x me-1"></i>No PDF attached.
-          </div>
-        <% } %>
-        <% if (user && user.isAdmin) { %>
-          <hr class="my-3" />
-          <div class="text-muted small mb-2 fw-semibold">Upload PDF</div>
-          <form method="POST" action="/drawings/<%= drawing.id %>/upload" enctype="multipart/form-data" class="d-flex gap-2 align-items-center flex-wrap">
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-            <input type="file" class="form-control form-control-sm" name="pdf" accept="application/pdf" required />
-            <button type="submit" class="btn btn-primary btn-sm text-nowrap">
-              <i class="bi bi-upload me-1"></i>Upload
-            </button>
-          </form>
-        <% } %>
-      </div>
-    </div>
-  </div>
+  </div><!-- /sidebar -->
 
 </div>
 

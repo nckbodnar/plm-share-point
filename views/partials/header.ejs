@@ -24,7 +24,7 @@
     <ul class="nav nav-pills flex-column">
       <li class="nav-item mb-2">
         <a class="nav-link text-white" href="/parts">
-          <i class="bi bi-box-seam me-2"></i>Released Parts
+          <i class="bi bi-box-seam me-2"></i>Parts
         </a>
       </li>
       <li class="nav-item mb-2">
@@ -32,11 +32,7 @@
           <i class="bi bi-diagram-3 me-2"></i>Assemblies
         </a>
       </li>
-      <li class="nav-item mb-2">
-        <a class="nav-link text-white" href="/drawings">
-          <i class="bi bi-file-earmark-ruled me-2"></i>Drawings
-        </a>
-      </li>
+      <% if (user.isAdmin) { %>
       <li class="nav-item mb-2">
         <a class="nav-link text-white" href="/projects">
           <i class="bi bi-folder me-2"></i>Projects
@@ -52,6 +48,7 @@
           <i class="bi bi-people me-2"></i>Groups
         </a>
       </li>
+      <% } %>
       <% if (user.isAdmin) { %>
       <li class="nav-item mb-2">
         <a class="nav-link text-white" href="/admin/dashboard">

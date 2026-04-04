@@ -11,11 +11,10 @@ import authRouter from './routes/auth';
 import partsRouter from './routes/parts';
 import adminRouter from './routes/admin';
 import assembliesRouter from './routes/assemblies';
-import drawingsRouter from './routes/drawings';
 import projectsRouter from './routes/projects';
 import locationsRouter from './routes/locations';
 import groupsRouter from './routes/groups';
-import { getPool } from './pgDb'; // ensure PostgreSQL pool is initialised
+import { getPool, initPgDb } from './pgDb'; // ensure PostgreSQL pool is initialised
 
 const app = express();
 
@@ -70,13 +69,14 @@ const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   cookieName: '_csrf',
   cookieOptions: {
     httpOnly: true,
-    secure: process.env['NODE_ENV'] === 'production',
+    secure: config.secureCookies,
     sameSite: 'lax',
   },
   // Only protect state-changing methods
   ignoredMethods: ['GET', 'HEAD', 'OPTIONS'],
   getCsrfTokenFromRequest: (req) =>
     (req.body as Record<string, string> | undefined)?.['_csrf'] ??
+    (req.query as Record<string, string>)['_csrf'] ??
     req.headers['x-csrf-token'],
   // Skip CSRF validation in development for easier testing
   skipCsrfProtection: () => process.env['NODE_ENV'] === 'development' || process.env['NODE_ENV'] === 'test',
@@ -113,17 +113,23 @@ app.use(optionalAuth);
 // ---------------------------------------------------------------------------
 app.use('/', authRouter);
 app.use('/parts', partsRouter);
+
+// Legacy redirect: /drawings/* → /parts/*
+app.use('/drawings', (req, res) => {
+  const target = req.url === '/' ? '/parts' : `/parts${req.url}`;
+  res.redirect(301, target);
+});
+
 app.use('/assemblies', assembliesRouter);
-app.use('/drawings', drawingsRouter);
 app.use('/projects', projectsRouter);
 app.use('/locations', locationsRouter);
 app.use('/groups', groupsRouter);
 app.use('/admin', adminRouter);
 
-// Home → redirect to parts list (or login if not authenticated)
+// Home → redirect to drawings list (or login if not authenticated)
 app.get('/', (req, res) => {
   if (req.user) {
-    res.redirect('/drawings');
+    res.redirect('/parts');
   } else {
     res.redirect('/login');
   }
@@ -148,7 +154,6 @@ app.use(
     err: Error,
     req: express.Request,
     res: express.Response,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _next: express.NextFunction,
   ) => {
     // CSRF token validation failure → friendly error
@@ -173,13 +178,13 @@ app.use(
 // Start
 // ---------------------------------------------------------------------------
 if (require.main === module) {
-  // Ensure PostgreSQL pool is initialised before accepting requests
-  getPool();
-
+  // Initialise schema and start accepting requests
+  initPgDb().then(() => {
   app.listen(config.port, () => {
     console.log(`PLM SharePoint running on http://localhost:${config.port}`);
     console.log(`Mode: ${config.nodeEnv} | PLM mock: ${config.plm.useMock}`);
   });
+  }).catch((err) => { console.error('[server] DB init failed:', err); process.exit(1); });
 }
 
 export default app;

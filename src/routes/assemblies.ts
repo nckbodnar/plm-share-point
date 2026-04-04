@@ -2,9 +2,9 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import {
-  listAssemblies, getDrawing, getAssemblyComponents,
+  listAssemblies, getTechDoc, getAssemblyComponents,
   addComponentToAssembly, removeComponentFromAssembly,
-  listDrawings, createDrawing, logAccess,
+  listTechDocs, createTechDoc, logAccess,
 } from '../pgDb';
 
 const router = Router();
@@ -37,9 +37,9 @@ router.get('/', viewLimiter, async (req, res) => {
 
 router.get('/new', requireAdmin, async (req, res) => {
   try {
-    const allDrawings = await listDrawings();
+    const allDrawings = await listTechDocs();
     res.render('assemblies/new', { title: 'New Assembly', user: req.user, allDrawings, error: null });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).render('error', { title: 'Error', message: 'Failed to load form.', user: req.user });
   }
 });
@@ -48,11 +48,11 @@ router.post('/', requireAdmin, async (req, res) => {
   try {
     const { name, description, revision } = req.body as Record<string, string>;
     if (!name?.trim()) {
-      const allDrawings = await listDrawings();
+      const allDrawings = await listTechDocs();
       res.status(400).render('assemblies/new', { title: 'New Assembly', user: req.user, allDrawings, error: 'Name is required.' });
       return;
     }
-    const drawing = await createDrawing({ name: name.trim(), description: description?.trim(), revision: revision?.trim() || 'A' });
+    const drawing = await createTechDoc({ name: name.trim(), description: description?.trim(), revision: revision?.trim() || 'A' });
     res.redirect(`/assemblies/${drawing.id}`);
   } catch (err) {
     console.error('[assemblies] POST / error:', err);
@@ -62,14 +62,14 @@ router.post('/', requireAdmin, async (req, res) => {
 
 router.get('/:id', viewLimiter, async (req, res) => {
   try {
-    const assembly = await getDrawing((req.params['id'] as string));
+    const assembly = await getTechDoc((req.params['id'] as string));
     if (!assembly) {
       res.status(404).render('error', { title: 'Not Found', message: 'Assembly not found.', user: req.user });
       return;
     }
 
     const components = await getAssemblyComponents(assembly.id);
-    const allDrawings = req.user!.isAdmin ? await listDrawings() : [];
+    const allDrawings = req.user!.isAdmin ? await listTechDocs() : [];
 
     await logAccess({
       userId: req.user!.userId,
@@ -115,7 +115,7 @@ router.delete('/:id/components/:childId', requireAdmin, async (req, res) => {
   try {
     await removeComponentFromAssembly((req.params['id'] as string), (req.params['childId'] as string));
     res.json({ success: true });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to remove component.' });
   }
 });
@@ -127,8 +127,8 @@ router.post('/:id/components/:childId/delete', requireAdmin, async (req, res) =>
 
 router.get('/:id/bom.json', viewLimiter, async (req, res) => {
   try {
-    const assembly = await getDrawing((req.params['id'] as string));
-    if (!assembly) { res.status(404).json({ error: 'Assembly not found.' }); return; }
+    const assembly = await getTechDoc((req.params['id'] as string));
+    if (!assembly) { res.status(404).json({ error: 'Assembly not found' }); return; }
     const components = await getAssemblyComponents(assembly.id);
 
     const nodes = [

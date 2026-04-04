@@ -5,6 +5,7 @@ import { findUserById } from '../pgDb';
 import type { JwtPayload } from '../types';
 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       user?: JwtPayload;
