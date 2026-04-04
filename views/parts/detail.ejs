@@ -205,6 +205,56 @@
       </div>
     </div>
 
+    <!-- Revision History -->
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-clock-history text-secondary"></i>
+        <strong>Revision History</strong>
+        <% if (revisions && revisions.length) { %>
+          <span class="badge bg-secondary ms-auto"><%= revisions.length %></span>
+        <% } %>
+      </div>
+      <div class="card-body p-0">
+        <% if (revisions && revisions.length) { %>
+          <ul class="list-group list-group-flush">
+            <% revisions.forEach(function(r) { %>
+              <li class="list-group-item d-flex align-items-center gap-2 px-3 py-2">
+                <span class="badge bg-secondary font-monospace"><%= r.revision %></span>
+                <div class="flex-grow-1 overflow-hidden">
+                  <div class="small text-muted text-truncate"><%= new Date(r.createdAt).toLocaleString() %></div>
+                  <% if (r.notes) { %>
+                    <div class="small text-truncate" title="<%= r.notes %>"><%= r.notes %></div>
+                  <% } %>
+                  <% if (r.createdBy) { %>
+                    <div class="small text-muted"><i class="bi bi-person me-1"></i><%= r.createdBy %></div>
+                  <% } %>
+                </div>
+                <div class="d-flex gap-1 flex-shrink-0">
+                  <% if (r.filePath) { %>
+                    <a href="/parts/<%= drawing.id %>/revisions/<%= r.id %>/download"
+                       class="btn btn-outline-secondary btn-sm py-0 px-1" title="View PDF" target="_blank">
+                      <i class="bi bi-file-earmark-pdf"></i>
+                    </a>
+                  <% } %>
+                  <% if (user && user.isAdmin) { %>
+                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1"
+                            data-url="/parts/<%= drawing.id %>/revisions/<%= r.id %>"
+                            data-csrf="<%= csrfToken %>"
+                            onclick="removeAssignment(this.dataset.url, this.dataset.csrf, ()=>location.reload())"
+                            title="Delete revision record">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  <% } %>
+                </div>
+              </li>
+            <% }); %>
+          </ul>
+        <% } else { %>
+          <p class="text-muted small mb-0 p-3">No revision history yet.</p>
+        <% } %>
+      </div>
+    </div>
+
   </div><!-- /sidebar -->
 
 </div>
@@ -212,6 +262,46 @@
 <!-- Admin: Edit & Delete -->
 <% if (user && user.isAdmin) { %>
   <div class="row g-4 mt-0">
+
+    <!-- Bump Revision -->
+    <div class="col-12">
+      <div class="card shadow-sm border-info">
+        <div class="card-header bg-info bg-opacity-10 d-flex align-items-center gap-2">
+          <i class="bi bi-arrow-up-circle text-info"></i>
+          <strong>Bump to New Revision</strong>
+          <span class="ms-2 badge bg-secondary font-monospace"><%= drawing.revision %></span>
+          <i class="bi bi-arrow-right mx-1 text-muted"></i>
+          <span class="badge bg-info text-dark font-monospace" id="nextRevBadge"></span>
+        </div>
+        <div class="card-body">
+          <p class="text-muted small mb-3">
+            The current revision <strong><%= drawing.revision %></strong> will be saved to history and the part will advance to the next revision.
+            You can optionally upload a new PDF for the new revision.
+          </p>
+          <form method="POST" action="/parts/<%= drawing.id %>/revisions?_csrf=<%= encodeURIComponent(csrfToken) %>" enctype="multipart/form-data">
+            <div class="row g-2 align-items-end">
+              <div class="col-12 col-md-5">
+                <label class="form-label small fw-semibold" for="bump-notes">Notes (optional)</label>
+                <input type="text" class="form-control form-control-sm" id="bump-notes" name="notes"
+                       placeholder="What changed in this revision?" />
+              </div>
+              <div class="col-12 col-md-5">
+                <label class="form-label small fw-semibold" for="bump-pdf">New PDF (optional)</label>
+                <input type="file" class="form-control form-control-sm" id="bump-pdf" name="pdf" accept="application/pdf" />
+              </div>
+              <div class="col-auto">
+                <button type="submit" class="btn btn-info btn-sm text-nowrap"
+                        onclick="return confirm('Bump revision from <%= drawing.revision %> to next? This cannot be undone.')">
+                  <i class="bi bi-arrow-up-circle me-1"></i>Bump Revision
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Part -->
     <div class="col-12">
       <div class="card shadow-sm border-warning">
         <div class="card-header bg-warning bg-opacity-10 d-flex align-items-center gap-2">
@@ -263,5 +353,25 @@
 <div class="mt-4 small text-muted">
   <i class="bi bi-clock me-1"></i>Last updated: <%= new Date(drawing.updatedAt || drawing.createdAt).toLocaleString() %>
 </div>
+
+<script>
+(function() {
+  // Compute and display the next revision label in the Bump Revision card
+  var badge = document.getElementById('nextRevBadge');
+  if (!badge) return;
+  var cur = '<%= drawing.revision %>'.toUpperCase();
+  badge.textContent = incrementRev(cur);
+
+  function incrementRev(s) {
+    var chars = s.split('');
+    var i = chars.length - 1;
+    while (i >= 0) {
+      if (chars[i] < 'Z') { chars[i] = String.fromCharCode(chars[i].charCodeAt(0) + 1); return chars.join(''); }
+      chars[i] = 'A'; i--;
+    }
+    return 'A' + chars.join('');
+  }
+})();
+</script>
 
 <%- include('../partials/footer') %>

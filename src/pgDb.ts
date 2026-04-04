@@ -121,6 +121,19 @@ CREATE TABLE IF NOT EXISTS assembly_components (
   reference_designator TEXT,
   PRIMARY KEY (parent_id, child_id)
 );
+
+-- Revision history: each row is a snapshot of a past revision
+CREATE TABLE IF NOT EXISTS tech_doc_revisions (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tech_doc_id  UUID NOT NULL REFERENCES tech_docs(id) ON DELETE CASCADE,
+  revision     TEXT NOT NULL,
+  file_path    TEXT,
+  notes        TEXT,
+  created_by   TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tech_doc_revisions_doc ON tech_doc_revisions (tech_doc_id, created_at DESC);
 `;
 
 export async function initPgDb(): Promise<void> {
@@ -252,6 +265,69 @@ export async function updateTechDoc(id: string, data: Partial<TechDoc>): Promise
 export async function deleteTechDoc(id: string): Promise<boolean> {
   const db = getPool();
   const { rowCount } = await db.query('DELETE FROM tech_docs WHERE id = $1', [id]);
+  return (rowCount ?? 0) > 0;
+}
+
+// ── Revision history ──────────────────────────────────────────────────────────
+
+export interface TechDocRevision {
+  id: string;
+  techDocId: string;
+  revision: string;
+  filePath?: string;
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+}
+
+function rowToRevision(row: Record<string, unknown>): TechDocRevision {
+  return {
+    id: row['id'] as string,
+    techDocId: row['tech_doc_id'] as string,
+    revision: row['revision'] as string,
+    filePath: (row['file_path'] as string | null) ?? undefined,
+    notes: (row['notes'] as string | null) ?? undefined,
+    createdBy: (row['created_by'] as string | null) ?? undefined,
+    createdAt: (row['created_at'] as Date).toISOString(),
+  };
+}
+
+/** Save a snapshot of the current revision into history */
+export async function createRevisionSnapshot(data: {
+  techDocId: string;
+  revision: string;
+  filePath?: string;
+  notes?: string;
+  createdBy?: string;
+}): Promise<TechDocRevision> {
+  const db = getPool();
+  const { rows } = await db.query(
+    `INSERT INTO tech_doc_revisions (tech_doc_id, revision, file_path, notes, created_by)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [data.techDocId, data.revision, data.filePath ?? null, data.notes ?? null, data.createdBy ?? null],
+  );
+  return rowToRevision(rows[0] as Record<string, unknown>);
+}
+
+export async function listRevisions(techDocId: string): Promise<TechDocRevision[]> {
+  const db = getPool();
+  const { rows } = await db.query(
+    `SELECT * FROM tech_doc_revisions WHERE tech_doc_id = $1 ORDER BY created_at DESC`,
+    [techDocId],
+  );
+  return (rows as Record<string, unknown>[]).map(rowToRevision);
+}
+
+export async function getRevision(revisionId: string): Promise<TechDocRevision | null> {
+  const db = getPool();
+  const { rows } = await db.query('SELECT * FROM tech_doc_revisions WHERE id = $1', [revisionId]);
+  if (rows.length === 0) return null;
+  return rowToRevision(rows[0] as Record<string, unknown>);
+}
+
+export async function deleteRevision(revisionId: string): Promise<boolean> {
+  const db = getPool();
+  const { rowCount } = await db.query('DELETE FROM tech_doc_revisions WHERE id = $1', [revisionId]);
   return (rowCount ?? 0) > 0;
 }
 
