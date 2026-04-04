@@ -39,7 +39,7 @@ router.get('/new', requireAdmin, async (req, res) => {
   try {
     const allDrawings = await listDrawings();
     res.render('assemblies/new', { title: 'New Assembly', user: req.user, allDrawings, error: null });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).render('error', { title: 'Error', message: 'Failed to load form.', user: req.user });
   }
 });
@@ -115,7 +115,7 @@ router.delete('/:id/components/:childId', requireAdmin, async (req, res) => {
   try {
     await removeComponentFromAssembly((req.params['id'] as string), (req.params['childId'] as string));
     res.json({ success: true });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to remove component.' });
   }
 });

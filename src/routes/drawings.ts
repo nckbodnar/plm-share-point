@@ -85,7 +85,7 @@ router.get('/new', requireAdmin, async (req, res) => {
   try {
     const [projects, locations] = await Promise.all([listProjects(), listLocations()]);
     res.render('drawings/new', { title: 'New Drawing', user: req.user, projects, locations, error: null });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).render('error', { title: 'Error', message: 'Failed to load form.', user: req.user });
   }
 });
@@ -228,7 +228,7 @@ router.delete('/:id/projects/:projectId', requireAdmin, async (req, res) => {
   try {
     await removeDrawingFromProject((req.params['id'] as string), (req.params['projectId'] as string));
     res.json({ success: true });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to remove project assignment' });
   }
 });
@@ -240,7 +240,7 @@ router.post('/:id/locations', requireAdmin, async (req, res) => {
     if (!locationId) { res.status(400).redirect(`/drawings/${req.params['id']}`); return; }
     await addDrawingToLocation((req.params['id'] as string), locationId);
     res.redirect(`/drawings/${req.params['id']}`);
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to assign location' });
   }
 });
@@ -250,7 +250,7 @@ router.delete('/:id/locations/:locationId', requireAdmin, async (req, res) => {
   try {
     await removeDrawingFromLocation((req.params['id'] as string), (req.params['locationId'] as string));
     res.json({ success: true });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to remove location assignment' });
   }
 });

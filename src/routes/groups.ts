@@ -76,7 +76,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
     const updated = await updateGroup((req.params['id'] as string), name);
     if (!updated) { res.status(404).json({ error: 'Group not found' }); return; }
     res.json({ group: updated });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to update group' });
   }
 });
@@ -87,7 +87,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     const ok = await deleteGroup((req.params['id'] as string));
     if (!ok) { res.status(404).json({ error: 'Group not found' }); return; }
     res.json({ success: true });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to delete group' });
   }
 });
@@ -104,7 +104,7 @@ router.post('/:id/users', requireAdmin, async (req, res) => {
     if (!email?.trim()) { res.redirect(`/groups/${req.params['id']}`); return; }
     await addUserToGroup(email.trim().toLowerCase(), (req.params['id'] as string));
     res.redirect(`/groups/${req.params['id']}`);
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to add user' });
   }
 });
@@ -113,7 +113,7 @@ router.delete('/:id/users/:email', requireAdmin, async (req, res) => {
   try {
     await removeUserFromGroup(decodeURIComponent((req.params['email'] as string)), (req.params['id'] as string));
     res.json({ success: true });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to remove user' });
   }
 });
@@ -125,7 +125,7 @@ router.post('/:id/projects', requireAdmin, async (req, res) => {
     if (!projectId) { res.redirect(`/groups/${req.params['id']}`); return; }
     await addGroupToProject((req.params['id'] as string), projectId);
     res.redirect(`/groups/${req.params['id']}`);
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to add project' });
   }
 });
@@ -134,7 +134,7 @@ router.delete('/:id/projects/:projectId', requireAdmin, async (req, res) => {
   try {
     await removeGroupFromProject((req.params['id'] as string), (req.params['projectId'] as string));
     res.json({ success: true });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to remove project' });
   }
 });

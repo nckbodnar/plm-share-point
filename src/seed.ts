@@ -199,7 +199,7 @@ async function seed(): Promise<void> {
   const existingDrawings = await listDrawings();
   const existingDrawingNames = new Set(existingDrawings.map((d) => d.name));
 
-  let createdDrawingsCount = 0;
+  let _createdDrawingsCount = 0;
 
   for (const def of drawingDefs) {
     if (existingDrawingNames.has(def.name)) {
@@ -236,7 +236,7 @@ async function seed(): Promise<void> {
       }
     }
 
-    createdDrawingsCount++;
+    _createdDrawingsCount++;
   }
 
   // --- Group-Project assignments ---

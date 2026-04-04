@@ -80,7 +80,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
     const updated = await updateProject((req.params['id'] as string), { name, description });
     if (!updated) { res.status(404).json({ error: 'Project not found' }); return; }
     res.json({ project: updated });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to update project' });
   }
 });
@@ -91,7 +91,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     const ok = await deleteProject((req.params['id'] as string));
     if (!ok) { res.status(404).json({ error: 'Project not found' }); return; }
     res.json({ success: true });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to delete project' });
   }
 });
@@ -108,7 +108,7 @@ router.post('/:id/groups', requireAdmin, async (req, res) => {
     if (!groupId) { res.redirect(`/projects/${req.params['id']}`); return; }
     await addGroupToProject(groupId, (req.params['id'] as string));
     res.redirect(`/projects/${req.params['id']}`);
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to add group' });
   }
 });
@@ -117,7 +117,7 @@ router.delete('/:id/groups/:groupId', requireAdmin, async (req, res) => {
   try {
     await removeGroupFromProject((req.params['groupId'] as string), (req.params['id'] as string));
     res.json({ success: true });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to remove group' });
   }
 });
@@ -129,7 +129,7 @@ router.post('/:id/locations', requireAdmin, async (req, res) => {
     if (!locationId) { res.redirect(`/projects/${req.params['id']}`); return; }
     await addLocationToProject((req.params['id'] as string), locationId);
     res.redirect(`/projects/${req.params['id']}`);
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to add location' });
   }
 });
@@ -138,7 +138,7 @@ router.delete('/:id/locations/:locationId', requireAdmin, async (req, res) => {
   try {
     await removeLocationFromProject((req.params['id'] as string), (req.params['locationId'] as string));
     res.json({ success: true });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to remove location' });
   }
 });

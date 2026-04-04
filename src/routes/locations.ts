@@ -46,7 +46,7 @@ router.get('/:id/edit', requireAdmin, async (req, res) => {
       return;
     }
     res.render('locations/edit', { title: 'Edit Location', user: req.user, location, error: null });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).render('error', { title: 'Error', message: 'Failed to load location.', user: req.user });
   }
 });
@@ -62,7 +62,7 @@ router.post('/:id', requireAdmin, async (req, res) => {
     }
     await updateLocation((req.params['id'] as string), name.trim());
     res.redirect('/locations');
-  } catch (err) {
+  } catch (_err) {
     res.status(500).render('error', { title: 'Error', message: 'Failed to update location.', user: req.user });
   }
 });
@@ -74,7 +74,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
     const updated = await updateLocation((req.params['id'] as string), name);
     if (!updated) { res.status(404).json({ error: 'Location not found' }); return; }
     res.json({ location: updated });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to update location' });
   }
 });
@@ -85,7 +85,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     const ok = await deleteLocation((req.params['id'] as string));
     if (!ok) { res.status(404).json({ error: 'Location not found' }); return; }
     res.json({ success: true });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: 'Failed to delete location' });
   }
 });

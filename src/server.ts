@@ -120,7 +120,7 @@ app.use('/locations', locationsRouter);
 app.use('/groups', groupsRouter);
 app.use('/admin', adminRouter);
 
-// Home → redirect to parts list (or login if not authenticated)
+// Home → redirect to drawings list (or login if not authenticated)
 app.get('/', (req, res) => {
   if (req.user) {
     res.redirect('/drawings');
@@ -148,7 +148,6 @@ app.use(
     err: Error,
     req: express.Request,
     res: express.Response,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _next: express.NextFunction,
   ) => {
     // CSRF token validation failure → friendly error

@@ -14,7 +14,6 @@ export const config = {
   adminEmail: optional('ADMIN_EMAIL', 'admin@example.com'),
   databaseUrl: optional('DATABASE_URL', 'postgresql://plm_user:plm_password@localhost:5432/plm_sharepoint'),
   uploadDir: optional('UPLOAD_DIR', './uploads'),
-  dbPath: optional('DB_PATH', './data/plm.db'),
   plm: {
     useMock: optional('PLM_USE_MOCK', 'true') === 'true',
   },
