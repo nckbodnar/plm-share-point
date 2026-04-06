@@ -53,23 +53,33 @@
     <div class="card-body border-bottom">
       <form method="POST" action="/assemblies/<%= assembly.id %>/components" class="row g-2 align-items-end">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-        <div class="col-md-5">
+        <div class="col-md-4">
           <label class="form-label small">Child Part</label>
-          <select name="childId" class="form-select form-select-sm" required>
+          <select name="childId" id="add-childId" class="form-select form-select-sm" required
+                  onchange="updateRevisionPicker(this.value)">
             <option value="">Select part…</option>
             <% allDrawings.forEach(function(d) { %>
               <% if (d.id !== assembly.id) { %>
-                <option value="<%= d.id %>"><%= d.name %> (Rev <%= d.revision %>)</option>
+                <option value="<%= d.id %>"
+                        data-revisions="<%= JSON.stringify((d.revisions||[]).map(function(r){return{id:r.id,revision:r.revision,notes:r.notes,createdAt:r.createdAt};})) %>">
+                  <%= d.name %> (current: Rev <%= d.revision %>)
+                </option>
               <% } %>
             <% }); %>
           </select>
         </div>
-        <div class="col-md-2">
-          <label class="form-label small">Quantity</label>
+        <div class="col-md-3">
+          <label class="form-label small">Revision to pin <span class="text-muted">(optional)</span></label>
+          <select name="pinnedRevisionId" id="add-pinnedRevisionId" class="form-select form-select-sm">
+            <option value="">Current revision (latest)</option>
+          </select>
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small">Qty</label>
           <input type="number" name="quantity" class="form-control form-control-sm" value="1" min="1" />
         </div>
-        <div class="col-md-3">
-          <label class="form-label small">Reference Designator</label>
+        <div class="col-md-2">
+          <label class="form-label small">Ref. Designator</label>
           <input type="text" name="referenceDesignator" class="form-control form-control-sm" placeholder="e.g. R1" />
         </div>
         <div class="col-md-2">
@@ -101,20 +111,89 @@
           <% components.forEach(function(c) { %>
           <tr>
             <td class="font-monospace small"><%= c.referenceDesignator || '–' %></td>
-            <td><a href="/parts/<%= c.id %>" class="small"><%= c.name %></a></td>
-            <td class="small"><%= c.revision %></td>
-            <td class="small text-center"><%= c.quantity %></td>
             <td>
+              <a href="/parts/<%= c.id %>" class="small fw-semibold"><%= c.name %></a>
+            </td>
+            <td class="small">
+              <% if (c.pinnedRevisionId) { %>
+                <%# Pinned to a historical revision %>
+                <span class="badge bg-warning text-dark font-monospace me-1" title="Pinned revision">
+                  <i class="bi bi-pin-fill me-1"></i>Rev <%= c.pinnedRevision %>
+                </span>
+                <% if (c.pinnedFilePath) { %>
+                  <a href="/parts/<%= c.id %>/revisions/<%= c.pinnedRevisionId %>/download"
+                     target="_blank" class="btn btn-outline-secondary btn-sm py-0 px-1 ms-1"
+                     title="View PDF for Rev <%= c.pinnedRevision %>">
+                    <i class="bi bi-file-earmark-pdf"></i>
+                  </a>
+                <% } %>
+                <span class="text-muted small ms-1">(current: Rev <%= c.revision %>)</span>
+              <% } else { %>
+                <%# Using current/live revision %>
+                <span class="badge bg-secondary font-monospace me-1">Rev <%= c.revision %></span>
+                <% if (c.filePath) { %>
+                  <a href="/parts/<%= c.id %>/download"
+                     target="_blank" class="btn btn-outline-secondary btn-sm py-0 px-1 ms-1"
+                     title="View current PDF">
+                    <i class="bi bi-file-earmark-pdf"></i>
+                  </a>
+                <% } %>
+              <% } %>
+            </td>
+            <td class="small text-center"><%= c.quantity %></td>
+            <td class="text-end" style="min-width:120px;">
               <% if (user && user.isAdmin) { %>
-              <form method="POST" action="/assemblies/<%= assembly.id %>/components/<%= c.id %>/delete" class="d-inline">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1" title="Remove">
-                  <i class="bi bi-trash"></i>
-                </button>
-              </form>
+                <%# Revision pin dropdown %>
+                <%
+                  var partRevs = [];
+                  allDrawings.forEach(function(d) { if (d.id === c.id && d.revisions) partRevs = d.revisions; });
+                %>
+                <% if (partRevs.length > 0) { %>
+                  <button class="btn btn-outline-secondary btn-sm py-0 px-1 me-1"
+                          type="button"
+                          title="Change pinned revision"
+                          data-bs-toggle="collapse"
+                          data-bs-target="#pin-form-<%= c.id %>">
+                    <i class="bi bi-pin"></i>
+                  </button>
+                <% } %>
+                <form method="POST" action="/assemblies/<%= assembly.id %>/components/<%= c.id %>/delete" class="d-inline">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1" title="Remove">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
               <% } %>
             </td>
           </tr>
+          <% if (user && user.isAdmin) { %>
+            <%
+              var partRevs2 = [];
+              allDrawings.forEach(function(d) { if (d.id === c.id && d.revisions) partRevs2 = d.revisions; });
+            %>
+            <% if (partRevs2.length > 0) { %>
+            <tr class="collapse" id="pin-form-<%= c.id %>">
+              <td colspan="5" class="bg-light py-2 px-3">
+                <form method="POST" action="/assemblies/<%= assembly.id %>/components/<%= c.id %>/pin"
+                      class="d-flex align-items-center gap-2 flex-wrap">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <label class="form-label mb-0 small fw-semibold">Pin revision:</label>
+                  <select name="pinnedRevisionId" class="form-select form-select-sm" style="max-width:320px;">
+                    <option value="">Current revision (latest – always up to date)</option>
+                    <% partRevs2.forEach(function(r) { %>
+                      <option value="<%= r.id %>" <%= c.pinnedRevisionId === r.id ? 'selected' : '' %>>
+                        Rev <%= r.revision %>
+                        <% if (r.notes) { %> – <%= r.notes %><% } %>
+                        (<%= new Date(r.createdAt).toLocaleDateString() %>)
+                      </option>
+                    <% }); %>
+                  </select>
+                  <button type="submit" class="btn btn-warning btn-sm">Save</button>
+                </form>
+              </td>
+            </tr>
+            <% } %>
+          <% } %>
           <% }); %>
         </tbody>
       </table>
@@ -219,6 +298,26 @@
 
   loadBom();
 })();
+</script>
+
+<script>
+// Populate the revision picker in the Add Component form when a part is selected
+function updateRevisionPicker(partId) {
+  var sel = document.getElementById('add-pinnedRevisionId');
+  sel.innerHTML = '<option value="">Current revision (latest)</option>';
+  if (!partId) return;
+  var partOpt = document.querySelector('#add-childId option[value="' + partId + '"]');
+  if (!partOpt) return;
+  var revisions = JSON.parse(partOpt.dataset.revisions || '[]');
+  revisions.forEach(function(r) {
+    var opt = document.createElement('option');
+    opt.value = r.id;
+    opt.textContent = 'Rev ' + r.revision +
+      (r.notes ? ' \u2013 ' + r.notes : '') +
+      ' (' + new Date(r.createdAt).toLocaleDateString() + ')';
+    sel.appendChild(opt);
+  });
+}
 </script>
 
 <%- include('../partials/footer') %>

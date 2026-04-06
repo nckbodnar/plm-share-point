@@ -215,13 +215,28 @@
         <% } %>
       </div>
       <div class="card-body p-0">
-        <% if (revisions && revisions.length) { %>
-          <ul class="list-group list-group-flush">
+        <!-- Current revision row (always first) -->
+        <ul class="list-group list-group-flush" id="revision-list">
+          <li class="list-group-item list-group-item-action d-flex align-items-center gap-2 px-3 py-2 active"
+              id="rev-row-current"
+              style="cursor:pointer;"
+              onclick="viewRevision('current', '<%= drawing.revision %>', '<% if (drawing.filePath) { %>/parts/<%= drawing.id %>/download<% } %>', this)">
+            <span class="badge bg-primary font-monospace"><%= drawing.revision %></span>
+            <div class="flex-grow-1 overflow-hidden">
+              <div class="small fw-semibold">Current revision</div>
+              <div class="small text-truncate opacity-75"><%= new Date(drawing.updatedAt || drawing.createdAt).toLocaleString() %></div>
+            </div>
+            <i class="bi bi-eye-fill text-primary flex-shrink-0"></i>
+          </li>
+          <% if (revisions && revisions.length) { %>
             <% revisions.forEach(function(r) { %>
-              <li class="list-group-item d-flex align-items-center gap-2 px-3 py-2">
+              <li class="list-group-item list-group-item-action d-flex align-items-center gap-2 px-3 py-2"
+                  id="rev-row-<%= r.id %>"
+                  style="cursor:pointer;"
+                  onclick="viewRevision('<%= r.id %>', '<%= r.revision %>', '<% if (r.filePath) { %>/parts/<%= drawing.id %>/revisions/<%= r.id %>/download<% } %>', this)">
                 <span class="badge bg-secondary font-monospace"><%= r.revision %></span>
                 <div class="flex-grow-1 overflow-hidden">
-                  <div class="small text-muted text-truncate"><%= new Date(r.createdAt).toLocaleString() %></div>
+                  <div class="small text-muted"><%= new Date(r.createdAt).toLocaleString() %></div>
                   <% if (r.notes) { %>
                     <div class="small text-truncate" title="<%= r.notes %>"><%= r.notes %></div>
                   <% } %>
@@ -229,28 +244,26 @@
                     <div class="small text-muted"><i class="bi bi-person me-1"></i><%= r.createdBy %></div>
                   <% } %>
                 </div>
-                <div class="d-flex gap-1 flex-shrink-0">
-                  <% if (r.filePath) { %>
-                    <a href="/parts/<%= drawing.id %>/revisions/<%= r.id %>/download"
-                       class="btn btn-outline-secondary btn-sm py-0 px-1" title="View PDF" target="_blank">
-                      <i class="bi bi-file-earmark-pdf"></i>
-                    </a>
-                  <% } %>
-                  <% if (user && user.isAdmin) { %>
-                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1"
-                            data-url="/parts/<%= drawing.id %>/revisions/<%= r.id %>"
-                            data-csrf="<%= csrfToken %>"
-                            onclick="removeAssignment(this.dataset.url, this.dataset.csrf, ()=>location.reload())"
-                            title="Delete revision record">
-                      <i class="bi bi-trash"></i>
-                    </button>
-                  <% } %>
+                <div class="d-flex gap-1 flex-shrink-0 align-items-center">
+                  <i class="bi bi-eye-fill text-primary me-1" style="display:none;"></i>
+                  <div onclick="event.stopPropagation()">
+                    <% if (user && user.isAdmin) { %>
+                      <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1"
+                              data-url="/parts/<%= drawing.id %>/revisions/<%= r.id %>"
+                              data-csrf="<%= csrfToken %>"
+                              onclick="removeAssignment(this.dataset.url, this.dataset.csrf, ()=>location.reload())"
+                              title="Delete revision record">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    <% } %>
+                  </div>
                 </div>
               </li>
             <% }); %>
-          </ul>
-        <% } else { %>
-          <p class="text-muted small mb-0 p-3">No revision history yet.</p>
+          <% } %>
+        </ul>
+        <% if (!revisions || !revisions.length) { %>
+          <p class="text-muted small mb-0 p-3">No previous revisions yet.</p>
         <% } %>
       </div>
     </div>
@@ -358,9 +371,10 @@
 (function() {
   // Compute and display the next revision label in the Bump Revision card
   var badge = document.getElementById('nextRevBadge');
-  if (!badge) return;
-  var cur = '<%= drawing.revision %>'.toUpperCase();
-  badge.textContent = incrementRev(cur);
+  if (badge) {
+    var cur = '<%= drawing.revision %>'.toUpperCase();
+    badge.textContent = incrementRev(cur);
+  }
 
   function incrementRev(s) {
     var chars = s.split('');
@@ -372,6 +386,62 @@
     return 'A' + chars.join('');
   }
 })();
+
+// Switch the inline PDF viewer to show a specific revision
+function viewRevision(revId, revLabel, pdfUrl, rowEl) {
+  var iframe      = document.getElementById('pdf-iframe');
+  var placeholder = document.getElementById('no-pdf-placeholder');
+  var revBadge    = document.getElementById('viewer-rev-badge');
+  var dlBtn       = document.getElementById('viewer-download-btn');
+
+  // Highlight active row
+  document.querySelectorAll('#revision-list .list-group-item').forEach(function(li) {
+    li.classList.remove('active');
+    // swap eye icon back to invisible on non-active rows
+    var eye = li.querySelector('.bi-eye-fill');
+    if (eye) eye.style.display = 'none';
+  });
+  rowEl.classList.add('active');
+  var activeEye = rowEl.querySelector('.bi-eye-fill, .rev-eye');
+  if (activeEye) activeEye.style.display = '';
+
+  // Update the badge in the card header
+  if (revBadge) revBadge.textContent = revLabel;
+
+  if (!pdfUrl) {
+    // No PDF for this revision
+    if (iframe)      { iframe.style.display = 'none'; }
+    if (placeholder) { placeholder.style.display = ''; }
+    if (dlBtn)       { dlBtn.classList.add('d-none'); }
+    return;
+  }
+
+  if (placeholder) placeholder.style.display = 'none';
+  if (dlBtn) {
+    dlBtn.href = pdfUrl;
+    dlBtn.classList.remove('d-none');
+  }
+
+  if (iframe) {
+    iframe.style.display = 'block';
+    iframe.src = pdfUrl;
+  } else {
+    // First time — no iframe existed (part had no PDF when page loaded)
+    var body = document.getElementById('viewer-body');
+    var newIframe = document.createElement('iframe');
+    newIframe.id = 'pdf-iframe';
+    newIframe.src = pdfUrl;
+    newIframe.style.cssText = 'width:100%;height:90vh;min-height:600px;border:none;display:block;';
+    body.insertBefore(newIframe, body.firstChild);
+  }
+}
+
+// Initialise: hide all eye icons except the first (current) one
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('#revision-list .bi-eye-fill').forEach(function(el, i) {
+    if (i > 0) el.style.display = 'none';
+  });
+});
 </script>
 
 <%- include('../partials/footer') %>

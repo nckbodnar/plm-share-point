@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { requireAdmin } from '../middleware/auth';
 import {
   getAllUsers, getPendingUsers, approveUser, rejectUser, revokeUser,
-  findUserById, getAuditLog, updatePassword,
+  findUserById, getAuditLog, getAuditLogFiltered, getAuditStats, updatePassword,
   listGroups, listLocations, getGroupsForUser, getLocationsForUser,
   removeAllGroupsFromUser, addUserToGroup,
   removeAllLocationsFromUser, addLocationToUser,
@@ -30,12 +30,13 @@ router.get('/', (req, res) => {
 
 router.get('/dashboard', async (req, res) => {
   try {
-    const [pendingUsers, allUsersRaw, drawings, projects, groups] = await Promise.all([
+    const [pendingUsers, allUsersRaw, drawings, projects, groups, stats] = await Promise.all([
       getPendingUsers(),
       getAllUsers(),
       listTechDocs(),
       listProjects(),
       listGroups(),
+      getAuditStats(),
     ]);
     const allUsers = allUsersRaw.filter((u) => !u.isAdmin);
     res.render('admin/dashboard', {
@@ -45,6 +46,7 @@ router.get('/dashboard', async (req, res) => {
       drawingsCount: drawings.length,
       projectsCount: projects.length,
       groupsCount: groups.length,
+      stats,
       user: req.user,
     });
   } catch (err) {
@@ -111,11 +113,72 @@ router.post('/users/:id/revoke', async (req, res) => {
 
 router.get('/audit', async (req, res) => {
   try {
-    const entries = await getAuditLog(500);
-    res.render('admin/audit', { title: 'Audit Log', entries, user: req.user });
+    const q = req.query as Record<string, string>;
+    const page = Math.max(1, parseInt(q['page'] || '1', 10));
+    const pageSize = 50;
+    const result = await getAuditLogFiltered({
+      userEmail:  q['user']   || undefined,
+      partNumber: q['part']   || undefined,
+      action:     q['action'] || undefined,
+      dateFrom:   q['from']   || undefined,
+      dateTo:     q['to']     || undefined,
+      sortBy:     (q['sort'] as 'accessed_at'|'user_email'|'part_number'|'action') || 'accessed_at',
+      sortDir:    (q['dir'] as 'asc'|'desc') || 'desc',
+      page,
+      pageSize,
+    });
+    res.render('admin/audit', {
+      title: 'Audit Log',
+      ...result,
+      filters: { user: q['user']||'', part: q['part']||'', action: q['action']||'', from: q['from']||'', to: q['to']||'' },
+      sort: q['sort'] || 'accessed_at',
+      dir:  q['dir']  || 'desc',
+      user: req.user,
+    });
   } catch (err) {
     console.error('[admin] GET /audit error:', err);
     res.status(500).render('error', { title: 'Error', message: 'Failed to load audit log.', user: req.user });
+  }
+});
+
+// CSV export – no pagination, returns all matching rows
+router.get('/audit/export.csv', async (req, res) => {
+  try {
+    const q = req.query as Record<string, string>;
+    const result = await getAuditLogFiltered({
+      userEmail:  q['user']   || undefined,
+      partNumber: q['part']   || undefined,
+      action:     q['action'] || undefined,
+      dateFrom:   q['from']   || undefined,
+      dateTo:     q['to']     || undefined,
+      sortBy:     'accessed_at',
+      sortDir:    'desc',
+      page: 1,
+      pageSize: 10000,
+    });
+    const lines = [
+      'Timestamp,User,Part Number,Revision,Action',
+      ...result.entries.map((e) =>
+        `"${e.accessedAt}","${e.userEmail}","${e.partNumber}","${e.revision}","${e.action}"`
+      ),
+    ];
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="audit-log.csv"');
+    res.send(lines.join('\n'));
+  } catch (err) {
+    console.error('[admin] GET /audit/export.csv error:', err);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// Stats JSON endpoint for live refresh
+router.get('/analytics.json', async (_req, res) => {
+  try {
+    const stats = await getAuditStats();
+    res.json(stats);
+  } catch (err) {
+    console.error('[admin] GET /analytics.json error:', err);
+    res.status(500).json({ error: 'Failed to load analytics' });
   }
 });
 
