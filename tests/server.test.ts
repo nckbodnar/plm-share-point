@@ -20,6 +20,8 @@ jest.mock('../src/pgDb', () => ({
   getAuditStats: jest.fn().mockResolvedValue({ totalViews: 0, uniqueUsers: 0, uniqueParts: 0, viewsToday: 0, topParts: [], topUsers: [], viewsByDay: [], viewsByAction: [], viewsByProject: [], recentUsers: [] }),
   logAccess: jest.fn().mockResolvedValue(undefined),
   listTechDocs: jest.fn().mockResolvedValue([]),
+  updateTechDoc: jest.fn().mockResolvedValue(null),
+  deleteTechDoc: jest.fn().mockResolvedValue(true),
   getTechDocsForUser: jest.fn().mockResolvedValue([]),
   getProjectsForTechDoc: jest.fn().mockResolvedValue([]),
   getLocationsForTechDoc: jest.fn().mockResolvedValue([]),
@@ -94,13 +96,13 @@ describe('POST /login', () => {
     expect(res.text).toContain('Invalid email or password');
   });
 
-  it('redirects to /drawings on success', async () => {
+  it('redirects to /parts on success', async () => {
     (pgDb.findUserByEmail as jest.Mock).mockResolvedValueOnce(approvedUser);
     const res = await request(app)
       .post('/login')
       .send('email=viewer%40example.com&password=Password1!');
     expect(res.status).toBe(302);
-    expect(res.headers['location']).toBe('/drawings');
+    expect(res.headers['location']).toBe('/parts');
   });
 
   it('rejects unapproved user', async () => {
@@ -357,5 +359,69 @@ describe('GET /assemblies/:id/bom.json', () => {
       .get('/assemblies/unknown-asm/bom.json')
       .set('Cookie', `auth_token=${approvedUserToken}`);
     expect(res.status).toBe(404);
+  });
+});
+
+describe('PUT /assemblies/:id', () => {
+  it('returns 403 for non-admin user', async () => {
+    const res = await request(app)
+      .put('/assemblies/asm-001')
+      .set('Cookie', `auth_token=${approvedUserToken}`)
+      .set('Content-Type', 'application/json')
+      .send({ name: 'Updated' });
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 when assembly does not exist', async () => {
+    (pgDb.updateTechDoc as jest.Mock).mockResolvedValueOnce(null);
+    const res = await request(app)
+      .put('/assemblies/unknown-id')
+      .set('Cookie', `auth_token=${adminToken}`)
+      .set('Content-Type', 'application/json')
+      .send({ name: 'Updated' });
+    expect(res.status).toBe(404);
+  });
+
+  it('updates assembly and returns JSON for admin', async () => {
+    const updated = {
+      id: 'asm-001', name: 'Updated Assembly', revision: 'B',
+      description: null, metadata: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    };
+    (pgDb.updateTechDoc as jest.Mock).mockResolvedValueOnce(updated);
+    const res = await request(app)
+      .put('/assemblies/asm-001')
+      .set('Cookie', `auth_token=${adminToken}`)
+      .set('Content-Type', 'application/json')
+      .send({ name: 'Updated Assembly', revision: 'B' });
+    expect(res.status).toBe(200);
+    const body = JSON.parse(res.text) as { assembly: { name: string } };
+    expect(body.assembly.name).toBe('Updated Assembly');
+  });
+});
+
+describe('DELETE /assemblies/:id', () => {
+  it('returns 403 for non-admin user', async () => {
+    const res = await request(app)
+      .delete('/assemblies/asm-001')
+      .set('Cookie', `auth_token=${approvedUserToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 when assembly does not exist', async () => {
+    (pgDb.deleteTechDoc as jest.Mock).mockResolvedValueOnce(false);
+    const res = await request(app)
+      .delete('/assemblies/unknown-id')
+      .set('Cookie', `auth_token=${adminToken}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('deletes assembly and returns JSON for admin', async () => {
+    (pgDb.deleteTechDoc as jest.Mock).mockResolvedValueOnce(true);
+    const res = await request(app)
+      .delete('/assemblies/asm-001')
+      .set('Cookie', `auth_token=${adminToken}`);
+    expect(res.status).toBe(200);
+    const body = JSON.parse(res.text) as { success: boolean };
+    expect(body.success).toBe(true);
   });
 });

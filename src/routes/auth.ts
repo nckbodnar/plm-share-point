@@ -32,7 +32,7 @@ function sanitizeRedirect(value: unknown): string {
   if (typeof value === 'string' && ALLOWED.has(value)) {
     return value;
   }
-  return '/drawings';
+  return '/parts';
 }
 
 // ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@ function sanitizeRedirect(value: unknown): string {
 // ---------------------------------------------------------------------------
 router.get('/login', (req, res) => {
   if (req.user) {
-    res.redirect('/drawings');
+    res.redirect('/parts');
     return;
   }
   const next = sanitizeRedirect(req.query['next']);
@@ -128,7 +128,7 @@ router.get('/logout', (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/request-access', (req, res) => {
   if (req.user) {
-    res.redirect('/drawings');
+    res.redirect('/parts');
     return;
   }
   res.render('request-access', { 
