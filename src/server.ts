@@ -14,7 +14,7 @@ import assembliesRouter from './routes/assemblies';
 import projectsRouter from './routes/projects';
 import locationsRouter from './routes/locations';
 import groupsRouter from './routes/groups';
-import { initPgDb } from './pgDb'; // ensure PostgreSQL pool is initialised
+import { getPool, initPgDb } from './pgDb'; // ensure PostgreSQL pool is initialised
 
 const app = express();
 
@@ -27,6 +27,7 @@ app.use(
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'unpkg.com'],
+        scriptSrcAttr: ["'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'unpkg.com'],
         fontSrc: ["'self'", 'cdn.jsdelivr.net', 'unpkg.com', 'data:'],
         imgSrc: ["'self'", 'data:'],
@@ -158,13 +159,6 @@ app.use(
   ) => {
     // CSRF token validation failure → friendly error
     if ((err as NodeJS.ErrnoException).code === 'EBADCSRFTOKEN' || err.message === 'invalid csrf token') {
-      const wantsJson =
-        req.headers['accept']?.includes('application/json') ||
-        (req.headers['content-type'] as string | undefined)?.includes('application/json');
-      if (wantsJson) {
-        res.status(403).json({ error: 'Invalid security token. Please refresh the page and try again.' });
-        return;
-      }
       res.status(403).render('error', {
         title: 'Invalid Request',
         message: 'The form submission was rejected due to an invalid security token. Please refresh the page and try again.',

@@ -26,6 +26,36 @@ router.get('/new', requireAdmin, (_req, res) => {
   res.render('projects/new', { title: 'New Project', user: _req.user, error: null });
 });
 
+// ── Edit form ─────────────────────────────────────────────────────────────────
+router.get('/:id/edit', requireAdmin, async (req, res) => {
+  try {
+    const project = await getProject((req.params['id'] as string));
+    if (!project) {
+      res.status(404).render('error', { title: 'Not Found', message: 'Project not found.', user: req.user });
+      return;
+    }
+    res.render('projects/edit', { title: 'Edit Project', user: req.user, project, error: null });
+  } catch (_err) {
+    res.status(500).render('error', { title: 'Error', message: 'Failed to load project.', user: req.user });
+  }
+});
+
+// ── Update (form POST) ────────────────────────────────────────────────────────
+router.post('/:id', requireAdmin, async (req, res) => {
+  try {
+    const { name, description } = req.body as Record<string, string>;
+    if (!name?.trim()) {
+      const project = await getProject((req.params['id'] as string));
+      res.status(400).render('projects/edit', { title: 'Edit Project', user: req.user, project, error: 'Name is required.' });
+      return;
+    }
+    await updateProject((req.params['id'] as string), { name: name.trim(), description: description?.trim() });
+    res.redirect(`/projects/${req.params['id']}`);
+  } catch (_err) {
+    res.status(500).render('error', { title: 'Error', message: 'Failed to update project.', user: req.user });
+  }
+});
+
 // ── Create ────────────────────────────────────────────────────────────────────
 router.post('/', requireAdmin, async (req, res) => {
   try {

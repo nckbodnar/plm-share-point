@@ -79,10 +79,6 @@
           <input type="number" name="quantity" class="form-control form-control-sm" value="1" min="1" />
         </div>
         <div class="col-md-2">
-          <label class="form-label small">Ref. Designator</label>
-          <input type="text" name="referenceDesignator" class="form-control form-control-sm" placeholder="e.g. R1" />
-        </div>
-        <div class="col-md-2">
           <button type="submit" class="btn btn-primary btn-sm w-100">Add</button>
         </div>
       </form>
@@ -100,7 +96,6 @@
       <table class="table table-hover table-sm mb-0">
         <thead class="table-light">
           <tr>
-            <th>Ref</th>
             <th>Name</th>
             <th>Revision</th>
             <th>Qty</th>
@@ -110,7 +105,6 @@
         <tbody>
           <% components.forEach(function(c) { %>
           <tr>
-            <td class="font-monospace small"><%= c.referenceDesignator || '–' %></td>
             <td>
               <a href="/parts/<%= c.id %>" class="small fw-semibold"><%= c.name %></a>
             </td>
@@ -206,50 +200,6 @@
   <i class="bi bi-clock me-1"></i>
   Created: <%= new Date(assembly.createdAt).toLocaleString() %>
 </div>
-
-<% if (user && user.isAdmin) { %>
-<div class="card shadow-sm border-warning mt-4">
-  <div class="card-header bg-warning bg-opacity-10 d-flex align-items-center gap-2">
-    <i class="bi bi-pencil-square text-warning"></i>
-    <strong>Edit Assembly</strong>
-  </div>
-  <div class="card-body">
-    <form id="editAssemblyForm">
-      <div class="row g-3">
-        <div class="col-12 col-md-4">
-          <label class="form-label" for="edit-name">Name</label>
-          <input type="text" class="form-control form-control-sm" id="edit-name" name="name"
-                 value="<%= assembly.name %>" required />
-        </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label" for="edit-revision">Revision</label>
-          <input type="text" class="form-control form-control-sm" id="edit-revision" name="revision"
-                 value="<%= assembly.revision || '' %>" />
-        </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label" for="edit-description">Description</label>
-          <input type="text" class="form-control form-control-sm" id="edit-description" name="description"
-                 value="<%= assembly.description || '' %>" />
-        </div>
-        <div class="col-auto d-flex gap-2">
-          <button type="button" class="btn btn-warning btn-sm"
-                  data-url="/assemblies/<%= assembly.id %>"
-                  data-csrf="<%= csrfToken %>"
-                  onclick="submitEdit(this.dataset.url, 'editAssemblyForm', this.dataset.csrf)">
-            <i class="bi bi-save me-1"></i>Save Changes
-          </button>
-          <button type="button" class="btn btn-danger btn-sm"
-                  data-url="/assemblies/<%= assembly.id %>"
-                  data-csrf="<%= csrfToken %>"
-                  onclick="deleteEntity(this.dataset.url, this.dataset.csrf, '/assemblies')">
-            <i class="bi bi-trash me-1"></i>Delete Assembly
-          </button>
-        </div>
-      </div>
-    </form>
-  </div>
-</div>
-<% } %>
 
 <!-- React + ReactFlow via CDN -->
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>

@@ -111,6 +111,41 @@ router.get('/new', requireAdmin, async (req, res) => {
   }
 });
 
+// ── Edit form ─────────────────────────────────────────────────────────────────
+router.get('/:id/edit', requireAdmin, async (req, res) => {
+  try {
+    const doc = await getTechDoc((req.params['id'] as string));
+    if (!doc) {
+      res.status(404).render('error', { title: 'Not Found', message: 'Part not found.', user: req.user });
+      return;
+    }
+    const [projects, locations] = await Promise.all([listProjects(), listLocations()]);
+    res.render('parts/edit', { title: 'Edit Part', user: req.user, drawing: doc, projects, locations, error: null });
+  } catch (_err) {
+    res.status(500).render('error', { title: 'Error', message: 'Failed to load part.', user: req.user });
+  }
+});
+
+// ── Update (form POST) ────────────────────────────────────────────────────────
+router.post('/:id', requireAdmin, async (req, res) => {
+  try {
+    const { name, description, revision} = req.body as Record<string, string>;
+    let metadata: TechDocMetadata | undefined;
+    try { metadata = JSON.parse((req.body as Record<string, string>)['metadata'] || '{}'); } catch { metadata = undefined; }
+
+    if (!name?.trim()) {
+      const doc = await getTechDoc((req.params['id'] as string));
+      const [projects, locations] = await Promise.all([listProjects(), listLocations()]);
+      res.status(400).render('parts/edit', { title: 'Edit Part', user: req.user, drawing: doc, projects, locations, error: 'Name is required.' });
+      return;
+    }
+    await updateTechDoc((req.params['id'] as string), { name: name.trim(), description: description?.trim(), revision: revision?.trim(), metadata });
+    res.redirect(`/parts/${req.params['id']}`);
+  } catch (_err) {
+    res.status(500).render('error', { title: 'Error', message: 'Failed to update part.', user: req.user });
+  }
+});
+
 // ── Create ────────────────────────────────────────────────────────────────────
 router.post('/', requireAdmin, async (req, res) => {
   try {

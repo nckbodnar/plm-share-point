@@ -80,8 +80,6 @@
               <th>Name</th>
               <th>Revision</th>
               <th>Description</th>
-              <th>Author</th>
-              <th>Tags</th>
               <th>Projects</th>
               <th>Actions</th>
             </tr>
@@ -99,18 +97,6 @@
                 </td>
                 <td class="text-muted small" style="max-width:200px; white-space:pre-wrap;">
                   <%= drawing.description || '–' %>
-                </td>
-                <td class="small">
-                  <%= (drawing.metadata && drawing.metadata.author) ? drawing.metadata.author : '–' %>
-                </td>
-                <td>
-                  <% if (drawing.metadata && drawing.metadata.tags && drawing.metadata.tags.length) { %>
-                    <% drawing.metadata.tags.forEach(function(tag) { %>
-                      <span class="badge bg-info text-dark me-1"><%= tag %></span>
-                    <% }); %>
-                  <% } else { %>
-                    <span class="text-muted small">–</span>
-                  <% } %>
                 </td>
                 <td class="small">
                   <% if (drawing.projects && drawing.projects.length) { %>
