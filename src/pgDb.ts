@@ -119,8 +119,23 @@ CREATE TABLE IF NOT EXISTS assembly_components (
   child_id             UUID NOT NULL REFERENCES tech_docs(id) ON DELETE CASCADE,
   quantity             INTEGER NOT NULL DEFAULT 1,
   reference_designator TEXT,
+  -- NULL = always use current revision; set = pinned to a specific historical revision
+  pinned_revision_id   UUID REFERENCES tech_doc_revisions(id) ON DELETE SET NULL,
   PRIMARY KEY (parent_id, child_id)
 );
+
+-- Revision history: each row is a snapshot of a past revision
+CREATE TABLE IF NOT EXISTS tech_doc_revisions (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tech_doc_id  UUID NOT NULL REFERENCES tech_docs(id) ON DELETE CASCADE,
+  revision     TEXT NOT NULL,
+  file_path    TEXT,
+  notes        TEXT,
+  created_by   TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tech_doc_revisions_doc ON tech_doc_revisions (tech_doc_id, created_at DESC);
 `;
 
 export async function initPgDb(): Promise<void> {
@@ -252,6 +267,69 @@ export async function updateTechDoc(id: string, data: Partial<TechDoc>): Promise
 export async function deleteTechDoc(id: string): Promise<boolean> {
   const db = getPool();
   const { rowCount } = await db.query('DELETE FROM tech_docs WHERE id = $1', [id]);
+  return (rowCount ?? 0) > 0;
+}
+
+// ── Revision history ──────────────────────────────────────────────────────────
+
+export interface TechDocRevision {
+  id: string;
+  techDocId: string;
+  revision: string;
+  filePath?: string;
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+}
+
+function rowToRevision(row: Record<string, unknown>): TechDocRevision {
+  return {
+    id: row['id'] as string,
+    techDocId: row['tech_doc_id'] as string,
+    revision: row['revision'] as string,
+    filePath: (row['file_path'] as string | null) ?? undefined,
+    notes: (row['notes'] as string | null) ?? undefined,
+    createdBy: (row['created_by'] as string | null) ?? undefined,
+    createdAt: (row['created_at'] as Date).toISOString(),
+  };
+}
+
+/** Save a snapshot of the current revision into history */
+export async function createRevisionSnapshot(data: {
+  techDocId: string;
+  revision: string;
+  filePath?: string;
+  notes?: string;
+  createdBy?: string;
+}): Promise<TechDocRevision> {
+  const db = getPool();
+  const { rows } = await db.query(
+    `INSERT INTO tech_doc_revisions (tech_doc_id, revision, file_path, notes, created_by)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [data.techDocId, data.revision, data.filePath ?? null, data.notes ?? null, data.createdBy ?? null],
+  );
+  return rowToRevision(rows[0] as Record<string, unknown>);
+}
+
+export async function listRevisions(techDocId: string): Promise<TechDocRevision[]> {
+  const db = getPool();
+  const { rows } = await db.query(
+    `SELECT * FROM tech_doc_revisions WHERE tech_doc_id = $1 ORDER BY created_at DESC`,
+    [techDocId],
+  );
+  return (rows as Record<string, unknown>[]).map(rowToRevision);
+}
+
+export async function getRevision(revisionId: string): Promise<TechDocRevision | null> {
+  const db = getPool();
+  const { rows } = await db.query('SELECT * FROM tech_doc_revisions WHERE id = $1', [revisionId]);
+  if (rows.length === 0) return null;
+  return rowToRevision(rows[0] as Record<string, unknown>);
+}
+
+export async function deleteRevision(revisionId: string): Promise<boolean> {
+  const db = getPool();
+  const { rowCount } = await db.query('DELETE FROM tech_doc_revisions WHERE id = $1', [revisionId]);
   return (rowCount ?? 0) > 0;
 }
 
@@ -733,14 +811,169 @@ export async function getAuditLog(limit = 500): Promise<AuditEntry[]> {
   }));
 }
 
+export interface AuditFilters {
+  userEmail?: string;
+  partNumber?: string;
+  action?: string;
+  dateFrom?: string;  // ISO date string
+  dateTo?: string;
+  sortBy?: 'accessed_at' | 'user_email' | 'part_number' | 'action';
+  sortDir?: 'asc' | 'desc';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PagedAuditLog {
+  entries: AuditEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export async function getAuditLogFiltered(filters: AuditFilters = {}): Promise<PagedAuditLog> {
+  const db = getPool();
+  const {
+    userEmail, partNumber, action, dateFrom, dateTo,
+    sortBy = 'accessed_at', sortDir = 'desc',
+    page = 1, pageSize = 50,
+  } = filters;
+
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (userEmail) { params.push(`%${userEmail}%`); conditions.push(`user_email ILIKE $${params.length}`); }
+  if (partNumber) { params.push(`%${partNumber}%`); conditions.push(`part_number ILIKE $${params.length}`); }
+  if (action)    { params.push(action); conditions.push(`action = $${params.length}`); }
+  if (dateFrom)  { params.push(dateFrom); conditions.push(`accessed_at >= $${params.length}::timestamptz`); }
+  if (dateTo)    { params.push(dateTo); conditions.push(`accessed_at < ($${params.length}::timestamptz + interval '1 day')`); }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const safeSort = ['accessed_at','user_email','part_number','action'].includes(sortBy) ? sortBy : 'accessed_at';
+  const safeDir  = sortDir === 'asc' ? 'ASC' : 'DESC';
+  const offset   = (page - 1) * pageSize;
+
+  const [dataRes, countRes] = await Promise.all([
+    db.query(
+      `SELECT * FROM audit_log ${where} ORDER BY ${safeSort} ${safeDir} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, pageSize, offset],
+    ),
+    db.query(`SELECT COUNT(*)::int AS total FROM audit_log ${where}`, params),
+  ]);
+
+  const total = (countRes.rows[0] as { total: number }).total;
+  const entries = (dataRes.rows as Record<string, unknown>[]).map((row) => ({
+    id: row['id'] as number,
+    userId: row['user_id'] as number,
+    userEmail: row['user_email'] as string,
+    partId: row['part_id'] as string,
+    partNumber: row['part_number'] as string,
+    revision: row['revision'] as string,
+    action: row['action'] as AuditEntry['action'],
+    accessedAt: (row['accessed_at'] as Date).toISOString(),
+  }));
+
+  return { entries, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+}
+
+export interface AuditStats {
+  totalViews: number;
+  uniqueUsers: number;
+  uniqueParts: number;
+  viewsToday: number;
+  topParts: Array<{ partNumber: string; partId: string; count: number }>;
+  topUsers: Array<{ userEmail: string; count: number }>;
+  viewsByDay: Array<{ day: string; count: number }>;
+  viewsByAction: Array<{ action: string; count: number }>;
+  viewsByProject: Array<{ projectName: string; count: number }>;
+  recentUsers: Array<{ userEmail: string; lastSeen: string; totalViews: number }>;
+}
+
+export async function getAuditStats(): Promise<AuditStats> {
+  const db = getPool();
+
+  const [total, uniqueU, uniqueP, today, topParts, topUsers, byDay, byAction, byProject, recentUsers] = await Promise.all([
+    db.query<{ c: string }>('SELECT COUNT(*)::int AS c FROM audit_log'),
+    db.query<{ c: string }>('SELECT COUNT(DISTINCT user_email)::int AS c FROM audit_log'),
+    db.query<{ c: string }>('SELECT COUNT(DISTINCT part_id)::int AS c FROM audit_log'),
+    db.query<{ c: string }>("SELECT COUNT(*)::int AS c FROM audit_log WHERE accessed_at >= NOW() - interval '1 day'"),
+    db.query<{ part_number: string; part_id: string; count: string }>(
+      `SELECT part_number, part_id, COUNT(*)::int AS count FROM audit_log GROUP BY part_number, part_id ORDER BY count DESC LIMIT 10`
+    ),
+    db.query<{ user_email: string; count: string }>(
+      `SELECT user_email, COUNT(*)::int AS count FROM audit_log GROUP BY user_email ORDER BY count DESC LIMIT 10`
+    ),
+    db.query<{ day: string; count: string }>(
+      `SELECT to_char(date_trunc('day', accessed_at), 'YYYY-MM-DD') AS day, COUNT(*)::int AS count
+       FROM audit_log WHERE accessed_at >= NOW() - interval '30 days'
+       GROUP BY day ORDER BY day`
+    ),
+    db.query<{ action: string; count: string }>(
+      `SELECT action, COUNT(*)::int AS count FROM audit_log GROUP BY action ORDER BY count DESC`
+    ),
+    db.query<{ project_name: string; count: string }>(
+      `SELECT p.name AS project_name, COUNT(al.id)::int AS count
+       FROM audit_log al
+       JOIN tech_doc_projects tdp ON tdp.tech_doc_id = al.part_id::uuid
+       JOIN projects p ON p.id = tdp.project_id
+       GROUP BY p.name ORDER BY count DESC LIMIT 10`
+    ),
+    db.query<{ user_email: string; last_seen: Date; total_views: string }>(
+      `SELECT user_email,
+              MAX(accessed_at) AS last_seen,
+              COUNT(*)::int    AS total_views
+       FROM audit_log
+       GROUP BY user_email
+       ORDER BY last_seen DESC
+       LIMIT 15`
+    ),
+  ]);
+
+  return {
+    totalViews:   Number((total.rows[0]   as { c: string }).c),
+    uniqueUsers:  Number((uniqueU.rows[0] as { c: string }).c),
+    uniqueParts:  Number((uniqueP.rows[0] as { c: string }).c),
+    viewsToday:   Number((today.rows[0]   as { c: string }).c),
+    topParts:     topParts.rows.map((r)  => ({ partNumber: r.part_number, partId: r.part_id, count: Number(r.count) })),
+    topUsers:     topUsers.rows.map((r)  => ({ userEmail: r.user_email, count: Number(r.count) })),
+    viewsByDay:   byDay.rows.map((r)     => ({ day: r.day, count: Number(r.count) })),
+    viewsByAction: byAction.rows.map((r) => ({ action: r.action, count: Number(r.count) })),
+    viewsByProject: byProject.rows.map((r) => ({ projectName: r.project_name, count: Number(r.count) })),
+    recentUsers:  recentUsers.rows.map((r) => ({
+      userEmail: r.user_email,
+      lastSeen: (r.last_seen as Date).toISOString(),
+      totalViews: Number(r.total_views),
+    })),
+  };
+}
+
 // ── Assembly components ───────────────────────────────────────────────────────
 
-export async function getAssemblyComponents(parentId: string): Promise<Array<TechDoc & { quantity: number; referenceDesignator?: string }>> {
+export interface AssemblyComponentRow extends TechDoc {
+  quantity: number;
+  referenceDesignator?: string;
+  /** null = live/current revision; set = pinned historical revision */
+  pinnedRevisionId?: string;
+  pinnedRevision?: string;       // revision label of the pinned snapshot
+  pinnedFilePath?: string;       // file_path of the pinned snapshot
+  pinnedNotes?: string;
+  pinnedCreatedAt?: string;
+}
+
+export async function getAssemblyComponents(parentId: string): Promise<AssemblyComponentRow[]> {
   const db = getPool();
   const { rows } = await db.query(
-    `SELECT d.*, ac.quantity, ac.reference_designator
+    `SELECT d.*,
+            ac.quantity,
+            ac.reference_designator,
+            ac.pinned_revision_id,
+            pr.revision   AS pinned_rev_label,
+            pr.file_path  AS pinned_file_path,
+            pr.notes      AS pinned_notes,
+            pr.created_at AS pinned_created_at
      FROM tech_docs d
      JOIN assembly_components ac ON ac.child_id = d.id
+     LEFT JOIN tech_doc_revisions pr ON pr.id = ac.pinned_revision_id
      WHERE ac.parent_id = $1
      ORDER BY d.name`,
     [parentId],
@@ -749,15 +982,28 @@ export async function getAssemblyComponents(parentId: string): Promise<Array<Tec
     ...rowToTechDoc(row),
     quantity: row['quantity'] as number,
     referenceDesignator: (row['reference_designator'] as string | null) ?? undefined,
+    pinnedRevisionId: (row['pinned_revision_id'] as string | null) ?? undefined,
+    pinnedRevision: (row['pinned_rev_label'] as string | null) ?? undefined,
+    pinnedFilePath: (row['pinned_file_path'] as string | null) ?? undefined,
+    pinnedNotes: (row['pinned_notes'] as string | null) ?? undefined,
+    pinnedCreatedAt: row['pinned_created_at'] ? (row['pinned_created_at'] as Date).toISOString() : undefined,
   }));
 }
 
-export async function addComponentToAssembly(parentId: string, childId: string, quantity = 1, referenceDesignator?: string): Promise<void> {
+export async function addComponentToAssembly(
+  parentId: string,
+  childId: string,
+  quantity = 1,
+  referenceDesignator?: string,
+  pinnedRevisionId?: string,
+): Promise<void> {
   const db = getPool();
   await db.query(
-    `INSERT INTO assembly_components (parent_id, child_id, quantity, reference_designator)
-     VALUES ($1, $2, $3, $4) ON CONFLICT (parent_id, child_id) DO UPDATE SET quantity = $3, reference_designator = $4`,
-    [parentId, childId, quantity, referenceDesignator ?? null],
+    `INSERT INTO assembly_components (parent_id, child_id, quantity, reference_designator, pinned_revision_id)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (parent_id, child_id) DO UPDATE
+       SET quantity = $3, reference_designator = $4, pinned_revision_id = $5`,
+    [parentId, childId, quantity, referenceDesignator ?? null, pinnedRevisionId ?? null],
   );
 }
 

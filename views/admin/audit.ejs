@@ -1,31 +1,122 @@
 <%- include('../partials/header', { title, user }) %>
 
-<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+<%
+function sortLink(col) {
+  const newDir = (sort === col && dir === 'desc') ? 'asc' : 'desc';
+  const p = new URLSearchParams({
+    ...(filters.user   ? { user:   filters.user   } : {}),
+    ...(filters.part   ? { part:   filters.part   } : {}),
+    ...(filters.action ? { action: filters.action } : {}),
+    ...(filters.from   ? { from:   filters.from   } : {}),
+    ...(filters.to     ? { to:     filters.to     } : {}),
+    sort: col, dir: newDir, page: '1',
+  });
+  return '/admin/audit?' + p.toString();
+}
+function sortIcon(col) {
+  if (sort !== col) return '<i class="bi bi-chevron-expand text-muted ms-1"></i>';
+  return dir === 'asc'
+    ? '<i class="bi bi-chevron-up text-primary ms-1"></i>'
+    : '<i class="bi bi-chevron-down text-primary ms-1"></i>';
+}
+function pageLink(p) {
+  const params = new URLSearchParams({
+    ...(filters.user   ? { user:   filters.user   } : {}),
+    ...(filters.part   ? { part:   filters.part   } : {}),
+    ...(filters.action ? { action: filters.action } : {}),
+    ...(filters.from   ? { from:   filters.from   } : {}),
+    ...(filters.to     ? { to:     filters.to     } : {}),
+    sort, dir, page: String(p),
+  });
+  return '/admin/audit?' + params.toString();
+}
+%>
+
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
   <div>
     <h1 class="h3 mb-1"><i class="bi bi-journal-text me-2 text-primary"></i>Audit Log</h1>
     <p class="text-muted mb-0 small">
-      Record of all part and document views. Showing last 500 entries.
+      <%= total.toLocaleString() %> matching records &middot; Page <%= page %> of <%= totalPages || 1 %>
     </p>
   </div>
-  <a href="/admin/dashboard" class="btn btn-outline-secondary btn-sm">
-    <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
-  </a>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="/admin/audit/export.csv?user=<%= encodeURIComponent(filters.user) %>&part=<%= encodeURIComponent(filters.part) %>&action=<%= encodeURIComponent(filters.action) %>&from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>"
+       class="btn btn-outline-success btn-sm">
+      <i class="bi bi-download me-1"></i>Export CSV
+    </a>
+    <a href="/admin/dashboard" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Dashboard
+    </a>
+  </div>
 </div>
 
+<!-- Filter bar -->
+<div class="card shadow-sm mb-3">
+  <div class="card-body py-2">
+    <form method="GET" action="/admin/audit" class="row g-2 align-items-end">
+      <input type="hidden" name="sort" value="<%= sort %>" />
+      <input type="hidden" name="dir"  value="<%= dir %>"  />
+      <input type="hidden" name="page" value="1" />
+      <div class="col-12 col-sm-6 col-md-3">
+        <label class="form-label small mb-1 fw-semibold">User</label>
+        <input type="text" name="user" class="form-control form-control-sm" placeholder="email…"
+               value="<%= filters.user %>" />
+      </div>
+      <div class="col-12 col-sm-6 col-md-3">
+        <label class="form-label small mb-1 fw-semibold">Part / Drawing</label>
+        <input type="text" name="part" class="form-control form-control-sm" placeholder="part name…"
+               value="<%= filters.part %>" />
+      </div>
+      <div class="col-6 col-sm-4 col-md-2">
+        <label class="form-label small mb-1 fw-semibold">Action</label>
+        <select name="action" class="form-select form-select-sm">
+          <option value="">All</option>
+          <option value="view_part"     <%= filters.action==='view_part'     ? 'selected':'' %>>View Part</option>
+          <option value="view_document" <%= filters.action==='view_document' ? 'selected':'' %>>View Document</option>
+          <option value="view_assembly" <%= filters.action==='view_assembly' ? 'selected':'' %>>View Assembly</option>
+        </select>
+      </div>
+      <div class="col-6 col-sm-4 col-md-2">
+        <label class="form-label small mb-1 fw-semibold">From</label>
+        <input type="date" name="from" class="form-control form-control-sm" value="<%= filters.from %>" />
+      </div>
+      <div class="col-6 col-sm-4 col-md-2">
+        <label class="form-label small mb-1 fw-semibold">To</label>
+        <input type="date" name="to" class="form-control form-control-sm" value="<%= filters.to %>" />
+      </div>
+      <div class="col-6 col-sm-auto d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-search me-1"></i>Filter
+        </button>
+        <a href="/admin/audit" class="btn btn-outline-secondary btn-sm">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Table -->
 <div class="card shadow-sm">
   <div class="card-body p-0">
     <% if (entries.length === 0) { %>
-      <p class="text-muted p-3 mb-0">No audit entries recorded yet.</p>
+      <p class="text-muted p-3 mb-0">No audit entries match the current filters.</p>
     <% } else { %>
       <div class="table-responsive">
         <table class="table table-hover table-sm mb-0">
           <thead class="table-light">
             <tr>
-              <th>Timestamp</th>
-              <th>User</th>
-              <th>Part Number</th>
-              <th>Revision</th>
-              <th>Action</th>
+              <th><a href="<%- sortLink('accessed_at') %>" class="text-decoration-none text-dark">
+                Timestamp <%- sortIcon('accessed_at') %>
+              </a></th>
+              <th><a href="<%- sortLink('user_email') %>" class="text-decoration-none text-dark">
+                User <%- sortIcon('user_email') %>
+              </a></th>
+              <th><a href="<%- sortLink('part_number') %>" class="text-decoration-none text-dark">
+                Part <%- sortIcon('part_number') %>
+              </a></th>
+              <th>Rev</th>
+              <th><a href="<%- sortLink('action') %>" class="text-decoration-none text-dark">
+                Action <%- sortIcon('action') %>
+              </a></th>
             </tr>
           </thead>
           <tbody>
@@ -33,11 +124,15 @@
               <tr>
                 <td class="text-nowrap small text-muted"><%= new Date(e.accessedAt).toLocaleString() %></td>
                 <td class="small"><%= e.userEmail %></td>
-                <td class="font-monospace small"><%= e.partNumber %></td>
-                <td class="small"><%= e.revision %></td>
+                <td>
+                  <a href="/parts/<%= e.partId %>" class="small font-monospace text-decoration-none"><%= e.partNumber %></a>
+                </td>
+                <td class="small font-monospace"><%= e.revision %></td>
                 <td>
                   <% if (e.action === 'view_document') { %>
                     <span class="badge bg-info text-dark"><i class="bi bi-file-earmark-text me-1"></i>Document</span>
+                  <% } else if (e.action === 'view_assembly') { %>
+                    <span class="badge bg-primary"><i class="bi bi-diagram-3 me-1"></i>Assembly</span>
                   <% } else { %>
                     <span class="badge bg-secondary"><i class="bi bi-eye me-1"></i>Part View</span>
                   <% } %>
@@ -47,8 +142,35 @@
           </tbody>
         </table>
       </div>
+
+      <!-- Pagination -->
+      <% if (totalPages > 1) { %>
+      <nav class="d-flex align-items-center justify-content-between px-3 py-2 border-top">
+        <span class="small text-muted">
+          Showing <%= (page-1)*pageSize+1 %>–<%= Math.min(page*pageSize, total) %> of <%= total.toLocaleString() %>
+        </span>
+        <ul class="pagination pagination-sm mb-0">
+          <li class="page-item <%= page <= 1 ? 'disabled' : '' %>">
+            <a class="page-link" href="<%- pageLink(page-1) %>">&#8249;</a>
+          </li>
+          <%
+            var pFrom = Math.max(1, page - 2);
+            var pTo   = Math.min(totalPages, page + 2);
+            for (var p = pFrom; p <= pTo; p++) {
+          %>
+            <li class="page-item <%= p === page ? 'active' : '' %>">
+              <a class="page-link" href="<%- pageLink(p) %>"><%= p %></a>
+            </li>
+          <% } %>
+          <li class="page-item <%= page >= totalPages ? 'disabled' : '' %>">
+            <a class="page-link" href="<%- pageLink(page+1) %>">&#8250;</a>
+          </li>
+        </ul>
+      </nav>
+      <% } %>
     <% } %>
   </div>
 </div>
 
 <%- include('../partials/footer') %>
+

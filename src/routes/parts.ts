@@ -11,6 +11,7 @@ import {
   getProjectsForTechDoc, addTechDocToProject, removeTechDocFromProject,
   getLocationsForTechDoc, addTechDocToLocation, removeTechDocFromLocation,
   listProjects, listLocations,
+  createRevisionSnapshot, listRevisions, getRevision, deleteRevision,
 } from '../pgDb';
 import type { TechDocMetadata } from '../types';
 
@@ -26,6 +27,30 @@ const storage = multer.diskStorage({
   },
   filename: (req, _file, cb) => {
     cb(null, `${req.params['id']}.pdf`);
+  },
+});
+
+// Separate storage for revision history PDFs (named by partId_revisionId.pdf)
+const revisionStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = path.join(config.uploadDir, 'parts', 'revisions');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, _file, cb) => {
+    // revisionId not known yet at this stage; use partId + timestamp
+    cb(null, `${req.params['id']}_${Date.now()}.pdf`);
+  },
+});
+const uploadRevision = multer({
+  storage: revisionStorage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || path.extname(file.originalname).toLowerCase() === '.pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'));
+    }
   },
 });
 const upload = multer({
@@ -124,11 +149,12 @@ router.get('/:id', async (req, res) => {
       res.status(404).render('error', { title: 'Not Found', message: 'Part not found.', user: req.user });
       return;
     }
-    const [projectsAssigned, locationsAssigned, allProjects, allLocations] = await Promise.all([
+    const [projectsAssigned, locationsAssigned, allProjects, allLocations, revisions] = await Promise.all([
       getProjectsForTechDoc(doc.id),
       getLocationsForTechDoc(doc.id),
       listProjects(),
       listLocations(),
+      listRevisions(doc.id),
     ]);
     res.render('parts/detail', {
       title: `Part: ${doc.name}`,
@@ -136,6 +162,7 @@ router.get('/:id', async (req, res) => {
       drawing: { ...doc, projects: projectsAssigned, locations: locationsAssigned },
       allProjects,
       allLocations,
+      revisions,
     });
   } catch (err) {
     console.error('[parts] GET /:id error:', err);
@@ -257,5 +284,119 @@ router.delete('/:id/locations/:locationId', requireAdmin, async (req, res) => {
     res.status(500).json({ error: 'Failed to remove location assignment' });
   }
 });
+
+// ── Bump to new revision ───────────────────────────────────────────────────────
+// POST /parts/:id/revisions
+// Body (multipart): notes?, pdf?
+// 1. Snapshots the current revision + file into history
+// 2. Increments the revision label (A→B, Z→AA, AA→AB, …)
+// 3. Optionally replaces the current PDF with the uploaded file
+router.post('/:id/revisions', requireAdmin, uploadRevision.single('pdf'), async (req, res) => {
+  try {
+    const id = req.params['id'] as string;
+    const doc = await getTechDoc(id);
+    if (!doc) { res.status(404).render('error', { title: 'Not Found', message: 'Part not found.', user: req.user }); return; }
+
+    const notes = ((req.body as Record<string, string>)['notes'] || '').trim() || undefined;
+
+    // 1. Save snapshot of current state into history
+    await createRevisionSnapshot({
+      techDocId: id,
+      revision: doc.revision,
+      filePath: doc.filePath,
+      notes,
+      createdBy: req.user!.email,
+    });
+
+    // 2. Compute next revision label
+    const nextRevision = incrementRevision(doc.revision);
+
+    // 3. Determine new file path (uploaded file, or keep current)
+    let newFilePath = doc.filePath;
+    if (req.file) {
+      // Move uploaded file to the canonical <id>.pdf location
+      const canonicalPath = path.join(config.uploadDir, 'parts', `${id}.pdf`);
+      fs.mkdirSync(path.dirname(canonicalPath), { recursive: true });
+      fs.renameSync(req.file.path, canonicalPath);
+      newFilePath = path.relative(process.cwd(), canonicalPath);
+    }
+
+    // 4. Update the main record
+    await updateTechDoc(id, { revision: nextRevision });
+    if (newFilePath !== doc.filePath) {
+      await setTechDocFilePath(id, newFilePath!);
+    }
+
+    res.redirect(`/parts/${id}`);
+  } catch (err) {
+    console.error('[parts] POST /:id/revisions error:', err);
+    res.status(500).render('error', { title: 'Error', message: 'Failed to bump revision.', user: req.user });
+  }
+});
+
+// ── Download a historical revision PDF ────────────────────────────────────────
+router.get('/:id/revisions/:revId/download', docLimiter, async (req, res) => {
+  try {
+    const rev = await getRevision(req.params['revId'] as string);
+    if (!rev || rev.techDocId !== (req.params['id'] as string)) {
+      res.status(404).render('error', { title: 'Not Found', message: 'Revision not found.', user: req.user }); return;
+    }
+    if (!rev.filePath) {
+      res.status(404).render('error', { title: 'Not Found', message: 'No PDF for this revision.', user: req.user }); return;
+    }
+    const absPath = path.isAbsolute(rev.filePath) ? rev.filePath : path.join(process.cwd(), rev.filePath);
+    if (!fs.existsSync(absPath)) {
+      res.status(404).render('error', { title: 'Not Found', message: 'PDF file not found on server.', user: req.user }); return;
+    }
+    const doc = await getTechDoc(req.params['id'] as string);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent((doc?.name ?? 'part'))}_rev${rev.revision}.pdf"`);
+    fs.createReadStream(absPath).pipe(res);
+  } catch (err) {
+    console.error('[parts] GET /:id/revisions/:revId/download error:', err);
+    res.status(500).render('error', { title: 'Error', message: 'Failed to serve PDF.', user: req.user });
+  }
+});
+
+// ── Delete a historical revision ───────────────────────────────────────────────
+router.delete('/:id/revisions/:revId', requireAdmin, async (req, res) => {
+  try {
+    const rev = await getRevision(req.params['revId'] as string);
+    if (!rev || rev.techDocId !== (req.params['id'] as string)) {
+      res.status(404).json({ error: 'Revision not found' }); return;
+    }
+    // Delete the stored file if it exists and is not the same as the current doc's file
+    if (rev.filePath) {
+      const absPath = path.isAbsolute(rev.filePath) ? rev.filePath : path.join(process.cwd(), rev.filePath);
+      // Only delete if it looks like a revisions/ path (don't nuke the live PDF)
+      if (absPath.includes(`${path.sep}revisions${path.sep}`) && fs.existsSync(absPath)) {
+        fs.unlinkSync(absPath);
+      }
+    }
+    await deleteRevision(req.params['revId'] as string);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[parts] DELETE /:id/revisions/:revId error:', err);
+    res.status(500).json({ error: 'Failed to delete revision' });
+  }
+});
+
+// ── Helper: increment revision label ──────────────────────────────────────────
+// A→B, B→C, …Z→AA, AA→AB, …AZ→BA, …ZZ→AAA
+function incrementRevision(rev: string): string {
+  const upper = rev.toUpperCase();
+  const chars = upper.split('');
+  let i = chars.length - 1;
+  while (i >= 0) {
+    if (chars[i]! < 'Z') {
+      chars[i] = String.fromCharCode(chars[i]!.charCodeAt(0) + 1);
+      return chars.join('');
+    }
+    chars[i] = 'A';
+    i--;
+  }
+  // All chars were Z → prepend A
+  return 'A' + chars.join('');
+}
 
 export default router;

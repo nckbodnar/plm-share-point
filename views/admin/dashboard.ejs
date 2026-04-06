@@ -1,29 +1,27 @@
-<%- include('../partials/header', { title, user }) %>
+﻿<%- include('../partials/header', { title, user }) %>
 
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
   <div>
-    <h1 class="h3 mb-1"><i class="bi bi-shield-check me-2 text-primary"></i>Access Management</h1>
-    <p class="text-muted mb-0 small">
-      Review and approve access requests. Only approved users can view released part specifications.
-    </p>
+    <h1 class="h3 mb-1"><i class="bi bi-shield-check me-2 text-primary"></i>Admin Dashboard</h1>
+    <p class="text-muted mb-0 small">Access management, analytics, and platform overview.</p>
   </div>
   <a href="/admin/audit" class="btn btn-outline-secondary btn-sm">
-    <i class="bi bi-journal-text me-1"></i>Audit Log
+    <i class="bi bi-journal-text me-1"></i>Full Audit Log
   </a>
 </div>
 
-<!-- Stats + Quick Actions -->
+<!-- â”€â”€ KPI Cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-3">
-    <div class="card text-center shadow-sm h-100">
+    <div class="card text-center shadow-sm h-100 border-0">
       <div class="card-body py-3">
         <div class="fs-2 fw-bold text-primary"><%= drawingsCount %></div>
-        <div class="small text-muted">Drawings</div>
+        <div class="small text-muted">Parts</div>
       </div>
     </div>
   </div>
   <div class="col-6 col-md-3">
-    <div class="card text-center shadow-sm h-100">
+    <div class="card text-center shadow-sm h-100 border-0">
       <div class="card-body py-3">
         <div class="fs-2 fw-bold text-success"><%= projectsCount %></div>
         <div class="small text-muted">Projects</div>
@@ -31,7 +29,7 @@
     </div>
   </div>
   <div class="col-6 col-md-3">
-    <div class="card text-center shadow-sm h-100">
+    <div class="card text-center shadow-sm h-100 border-0">
       <div class="card-body py-3">
         <div class="fs-2 fw-bold text-info"><%= groupsCount %></div>
         <div class="small text-muted">Groups</div>
@@ -39,7 +37,7 @@
     </div>
   </div>
   <div class="col-6 col-md-3">
-    <div class="card text-center shadow-sm h-100">
+    <div class="card text-center shadow-sm h-100 border-0">
       <div class="card-body py-3">
         <div class="fs-2 fw-bold text-warning"><%= allUsers.filter(u => u.isApproved).length %></div>
         <div class="small text-muted">Approved Users</div>
@@ -48,7 +46,143 @@
   </div>
 </div>
 
-<!-- Quick Actions -->
+<!-- â”€â”€ Analytics Stats Row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-sm-3">
+    <div class="card border-0 shadow-sm text-center h-100">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-primary"><%= stats.totalViews.toLocaleString() %></div>
+        <div class="small text-muted">Total Views</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-sm-3">
+    <div class="card border-0 shadow-sm text-center h-100">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-success"><%= stats.viewsToday.toLocaleString() %></div>
+        <div class="small text-muted">Views Today</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-sm-3">
+    <div class="card border-0 shadow-sm text-center h-100">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-info"><%= stats.uniqueUsers %></div>
+        <div class="small text-muted">Active Users</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-sm-3">
+    <div class="card border-0 shadow-sm text-center h-100">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-warning"><%= stats.uniqueParts %></div>
+        <div class="small text-muted">Viewed Parts</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- â”€â”€ Charts Row 1: Activity + Action Type â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+<div class="row g-3 mb-4">
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-transparent d-flex align-items-center gap-2">
+        <i class="bi bi-graph-up text-primary"></i>
+        <strong>Views per Day â€” last 30 days</strong>
+      </div>
+      <div class="card-body">
+        <canvas id="chartByDay" height="100"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-transparent d-flex align-items-center gap-2">
+        <i class="bi bi-pie-chart text-info"></i>
+        <strong>By Action Type</strong>
+      </div>
+      <div class="card-body d-flex align-items-center justify-content-center">
+        <canvas id="chartByAction" style="max-height:220px;"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- â”€â”€ Charts Row 2: Top Parts + Top Users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+<div class="row g-3 mb-4">
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-transparent d-flex align-items-center gap-2">
+        <i class="bi bi-file-earmark-bar-graph text-warning"></i>
+        <strong>Top 10 Most Viewed Parts</strong>
+      </div>
+      <div class="card-body">
+        <canvas id="chartTopParts" height="160"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-transparent d-flex align-items-center gap-2">
+        <i class="bi bi-person-lines-fill text-success"></i>
+        <strong>Top 10 Most Active Users</strong>
+      </div>
+      <div class="card-body">
+        <canvas id="chartTopUsers" height="160"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- â”€â”€ Charts Row 3: Views by Project + Recent Users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+<div class="row g-3 mb-4">
+  <div class="col-12 col-lg-5">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-transparent d-flex align-items-center gap-2">
+        <i class="bi bi-folder2-open text-success"></i>
+        <strong>Views by Project</strong>
+      </div>
+      <div class="card-body">
+        <% if (stats.viewsByProject.length === 0) { %>
+          <p class="text-muted small">No data yet.</p>
+        <% } else { %>
+          <canvas id="chartByProject" height="160"></canvas>
+        <% } %>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-7">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-transparent d-flex align-items-center gap-2">
+        <i class="bi bi-clock-history text-secondary"></i>
+        <strong>Recent User Activity</strong>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr><th>User</th><th>Last Seen</th><th class="text-end">Total Views</th></tr>
+            </thead>
+            <tbody>
+              <% stats.recentUsers.forEach(function(u) { %>
+                <tr>
+                  <td class="small"><%= u.userEmail %></td>
+                  <td class="small text-muted text-nowrap"><%= new Date(u.lastSeen).toLocaleString() %></td>
+                  <td class="small text-end fw-semibold"><%= u.totalViews.toLocaleString() %></td>
+                </tr>
+              <% }); %>
+              <% if (!stats.recentUsers.length) { %>
+                <tr><td colspan="3" class="text-muted small p-3">No activity yet.</td></tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- â”€â”€ Quick Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <div class="card shadow-sm mb-4">
   <div class="card-header d-flex align-items-center gap-2">
     <i class="bi bi-lightning-charge text-primary"></i>
@@ -56,7 +190,7 @@
   </div>
   <div class="card-body d-flex flex-wrap gap-2">
     <a href="/drawings" class="btn btn-outline-primary btn-sm">
-      <i class="bi bi-file-earmark-pdf me-1"></i>Manage Drawings
+      <i class="bi bi-file-earmark-pdf me-1"></i>Manage Parts
     </a>
     <a href="/projects" class="btn btn-outline-success btn-sm">
       <i class="bi bi-folder me-1"></i>Manage Projects
@@ -67,10 +201,16 @@
     <a href="/groups" class="btn btn-outline-info btn-sm">
       <i class="bi bi-people me-1"></i>Manage Groups
     </a>
+    <a href="/admin/users" class="btn btn-outline-warning btn-sm">
+      <i class="bi bi-person-gear me-1"></i>Manage Users
+    </a>
+    <a href="/admin/audit" class="btn btn-outline-dark btn-sm">
+      <i class="bi bi-journal-text me-1"></i>Full Audit Log
+    </a>
   </div>
 </div>
 
-<!-- Pending Requests -->
+<!-- â”€â”€ Pending Requests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <div class="card shadow-sm mb-4">
   <div class="card-header d-flex align-items-center gap-2">
     <i class="bi bi-hourglass-split text-warning"></i>
@@ -87,12 +227,8 @@
         <table class="table table-hover mb-0">
           <thead class="table-light">
             <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Company</th>
-              <th>Reason</th>
-              <th>Requested</th>
-              <th>Actions</th>
+              <th>Name</th><th>Email</th><th>Company</th>
+              <th>Reason</th><th>Requested</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -100,20 +236,16 @@
               <tr>
                 <td><%= u.name %></td>
                 <td><a href="mailto:<%= u.email %>"><%= u.email %></a></td>
-                <td><%= u.company || '–' %></td>
-                <td class="small text-muted" style="max-width:220px; white-space:pre-wrap;"><%= u.reason || '–' %></td>
+                <td><%= u.company || 'â€“' %></td>
+                <td class="small text-muted" style="max-width:220px; white-space:pre-wrap;"><%= u.reason || 'â€“' %></td>
                 <td class="small text-nowrap text-muted"><%= new Date(u.requestedAt).toLocaleDateString() %></td>
                 <td>
                   <div class="d-flex gap-2 flex-wrap">
-                    <!-- Approve -->
                     <form method="POST" action="/admin/users/<%= u.id %>/approve" class="d-inline">
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
                       <input type="hidden" name="notes" value="Access approved." />
-                      <button type="submit" class="btn btn-success btn-sm">
-                        <i class="bi bi-check-lg me-1"></i>Approve
-                      </button>
+                      <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-check-lg me-1"></i>Approve</button>
                     </form>
-                    <!-- Reject -->
                     <form method="POST" action="/admin/users/<%= u.id %>/reject" class="d-inline">
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
                       <input type="hidden" name="notes" value="Access request rejected." />
@@ -133,7 +265,7 @@
   </div>
 </div>
 
-<!-- Approved Users -->
+<!-- â”€â”€ Approved Users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <div class="card shadow-sm">
   <div class="card-header d-flex align-items-center gap-2">
     <i class="bi bi-people text-success"></i>
@@ -148,23 +280,16 @@
       <div class="table-responsive">
         <table class="table table-hover mb-0">
           <thead class="table-light">
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Company</th>
-              <th>Approved</th>
-              <th>Approved By</th>
-              <th>Actions</th>
-            </tr>
+            <tr><th>Name</th><th>Email</th><th>Company</th><th>Approved</th><th>Approved By</th><th>Actions</th></tr>
           </thead>
           <tbody>
             <% approvedUsers.forEach(function(u) { %>
               <tr>
                 <td><%= u.name %></td>
                 <td><a href="mailto:<%= u.email %>"><%= u.email %></a></td>
-                <td><%= u.company || '–' %></td>
-                <td class="small text-nowrap text-muted"><%= u.approvedAt ? new Date(u.approvedAt).toLocaleDateString() : '–' %></td>
-                <td class="small text-muted"><%= u.approvedBy || '–' %></td>
+                <td><%= u.company || 'â€“' %></td>
+                <td class="small text-nowrap text-muted"><%= u.approvedAt ? new Date(u.approvedAt).toLocaleDateString() : 'â€“' %></td>
+                <td class="small text-muted"><%= u.approvedBy || 'â€“' %></td>
                 <td>
                   <form method="POST" action="/admin/users/<%= u.id %>/revoke" class="d-inline">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
@@ -182,5 +307,103 @@
     <% } %>
   </div>
 </div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+  const palette = ['#0d6efd','#198754','#0dcaf0','#ffc107','#dc3545','#6f42c1','#fd7e14','#20c997','#6c757d','#d63384'];
+
+  // 1. Views per day (line chart)
+  const byDay = <%- JSON.stringify(stats.viewsByDay) %>;
+  if (byDay.length) {
+    new Chart(document.getElementById('chartByDay'), {
+      type: 'line',
+      data: {
+        labels: byDay.map(d => d.day),
+        datasets: [{ label: 'Views', data: byDay.map(d => d.count),
+          borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.1)',
+          fill: true, tension: 0.3, pointRadius: 3 }]
+      },
+      options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+  } else {
+    document.getElementById('chartByDay').parentElement.innerHTML = '<p class="text-muted small">No activity in the last 30 days.</p>';
+  }
+
+  // 2. By action type (doughnut)
+  const byAction = <%- JSON.stringify(stats.viewsByAction) %>;
+  const actionLabels = { view_part: 'Part View', view_document: 'Document', view_assembly: 'Assembly' };
+  if (byAction.length) {
+    new Chart(document.getElementById('chartByAction'), {
+      type: 'doughnut',
+      data: {
+        labels: byAction.map(a => actionLabels[a.action] || a.action),
+        datasets: [{ data: byAction.map(a => a.count), backgroundColor: palette }]
+      },
+      options: { plugins: { legend: { position: 'bottom' } }, cutout: '60%' }
+    });
+  }
+
+  // 3. Top parts (horizontal bar)
+  const topParts = <%- JSON.stringify(stats.topParts) %>;
+  if (topParts.length) {
+    new Chart(document.getElementById('chartTopParts'), {
+      type: 'bar',
+      data: {
+        labels: topParts.map(p => p.partNumber.length > 22 ? p.partNumber.slice(0,20)+'â€¦' : p.partNumber),
+        datasets: [{ label: 'Views', data: topParts.map(p => p.count),
+          backgroundColor: '#ffc107', borderRadius: 4 }]
+      },
+      options: {
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
+      }
+    });
+  } else {
+    document.getElementById('chartTopParts').parentElement.innerHTML = '<p class="text-muted small">No data yet.</p>';
+  }
+
+  // 4. Top users (horizontal bar)
+  const topUsers = <%- JSON.stringify(stats.topUsers) %>;
+  if (topUsers.length) {
+    new Chart(document.getElementById('chartTopUsers'), {
+      type: 'bar',
+      data: {
+        labels: topUsers.map(u => u.userEmail.length > 24 ? u.userEmail.slice(0,22)+'â€¦' : u.userEmail),
+        datasets: [{ label: 'Views', data: topUsers.map(u => u.count),
+          backgroundColor: '#198754', borderRadius: 4 }]
+      },
+      options: {
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
+      }
+    });
+  } else {
+    document.getElementById('chartTopUsers').parentElement.innerHTML = '<p class="text-muted small">No data yet.</p>';
+  }
+
+  // 5. By project (horizontal bar)
+  const byProject = <%- JSON.stringify(stats.viewsByProject) %>;
+  const projCanvas = document.getElementById('chartByProject');
+  if (projCanvas && byProject.length) {
+    new Chart(projCanvas, {
+      type: 'bar',
+      data: {
+        labels: byProject.map(p => p.projectName),
+        datasets: [{ label: 'Views', data: byProject.map(p => p.count),
+          backgroundColor: '#0dcaf0', borderRadius: 4 }]
+      },
+      options: {
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
+      }
+    });
+  }
+})();
+</script>
 
 <%- include('../partials/footer') %>

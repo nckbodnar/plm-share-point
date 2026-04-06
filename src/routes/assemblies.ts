@@ -4,7 +4,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth';
 import {
   listAssemblies, getTechDoc, getAssemblyComponents,
   addComponentToAssembly, removeComponentFromAssembly,
-  listTechDocs, createTechDoc, logAccess,
+  listTechDocs, createTechDoc, logAccess, listRevisions,
 } from '../pgDb';
 
 const router = Router();
@@ -71,6 +71,11 @@ router.get('/:id', viewLimiter, async (req, res) => {
     const components = await getAssemblyComponents(assembly.id);
     const allDrawings = req.user!.isAdmin ? await listTechDocs() : [];
 
+    // Fetch revision history for every component so the view can offer a picker
+    const allDrawingsWithRevisions = await Promise.all(
+      allDrawings.map(async (d) => ({ ...d, revisions: await listRevisions(d.id) }))
+    );
+
     await logAccess({
       userId: req.user!.userId,
       userEmail: req.user!.email,
@@ -85,7 +90,7 @@ router.get('/:id', viewLimiter, async (req, res) => {
       title: `Assembly: ${assembly.name}`,
       assembly,
       components,
-      allDrawings,
+      allDrawings: allDrawingsWithRevisions,
       user: req.user,
     });
   } catch (err) {
@@ -96,18 +101,40 @@ router.get('/:id', viewLimiter, async (req, res) => {
 
 router.post('/:id/components', requireAdmin, async (req, res) => {
   try {
-    const { childId, quantity, referenceDesignator } = req.body as Record<string, string>;
+    const { childId, quantity, referenceDesignator, pinnedRevisionId } = req.body as Record<string, string>;
     if (!childId) { res.redirect(`/assemblies/${req.params['id']}`); return; }
     await addComponentToAssembly(
       (req.params['id'] as string),
       childId,
       parseInt(quantity || '1', 10),
       referenceDesignator?.trim() || undefined,
+      pinnedRevisionId?.trim() || undefined,
     );
     res.redirect(`/assemblies/${req.params['id']}`);
   } catch (err) {
     console.error('[assemblies] POST /:id/components error:', err);
     res.status(500).json({ error: 'Failed to add component.' });
+  }
+});
+
+// ── Update component revision pin ─────────────────────────────────────────────
+router.post('/:id/components/:childId/pin', requireAdmin, async (req, res) => {
+  try {
+    const { pinnedRevisionId } = req.body as Record<string, string>;
+    // Re-fetch existing qty/ref to preserve them
+    const components = await getAssemblyComponents(req.params['id'] as string);
+    const existing = components.find((c) => c.id === req.params['childId']);
+    await addComponentToAssembly(
+      (req.params['id'] as string),
+      (req.params['childId'] as string),
+      existing?.quantity ?? 1,
+      existing?.referenceDesignator,
+      pinnedRevisionId?.trim() || undefined,  // empty string = unpin (use current)
+    );
+    res.redirect(`/assemblies/${req.params['id']}`);
+  } catch (err) {
+    console.error('[assemblies] POST /:id/components/:childId/pin error:', err);
+    res.status(500).json({ error: 'Failed to update revision pin.' });
   }
 });
 
@@ -148,10 +175,11 @@ router.get('/:id/bom.json', viewLimiter, async (req, res) => {
         type: 'default',
         position: { x: i * 220, y: 160 },
         data: {
-          label: `${c.name}\nRev ${c.revision}`,
+          label: `${c.name}\nRev ${c.pinnedRevision ?? c.revision}${c.pinnedRevision ? ' \u{1F4CC}' : ''}`,
           name: c.name,
           partId: c.id,
-          revision: c.revision,
+          revision: c.pinnedRevision ?? c.revision,
+          pinnedRevisionId: c.pinnedRevisionId,
           quantity: c.quantity,
           referenceDesignator: c.referenceDesignator,
           isRoot: false,
