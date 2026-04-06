@@ -202,6 +202,80 @@ describe('GET /parts', () => {
   });
 });
 
+describe('PUT /parts/:id', () => {
+  it('returns 403 for non-admin user', async () => {
+    const res = await request(app)
+      .put('/parts/p-001')
+      .set('Cookie', `auth_token=${approvedUserToken}`)
+      .set('Content-Type', 'application/json')
+      .send({ name: 'Updated' });
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 when part does not exist', async () => {
+    (pgDb.updateTechDoc as jest.Mock).mockResolvedValueOnce(null);
+    const res = await request(app)
+      .put('/parts/unknown-id')
+      .set('Cookie', `auth_token=${adminToken}`)
+      .set('Content-Type', 'application/json')
+      .send({ name: 'Updated' });
+    expect(res.status).toBe(404);
+  });
+
+  it('updates part and returns JSON for admin', async () => {
+    const updated = {
+      id: 'p-001', name: 'Updated Part', revision: 'B',
+      description: null, metadata: {}, filePath: null,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    };
+    (pgDb.updateTechDoc as jest.Mock).mockResolvedValueOnce(updated);
+    const res = await request(app)
+      .put('/parts/p-001')
+      .set('Cookie', `auth_token=${adminToken}`)
+      .set('Content-Type', 'application/json')
+      .send({ name: 'Updated Part', revision: 'B' });
+    expect(res.status).toBe(200);
+    const body = JSON.parse(res.text) as { drawing: { name: string } };
+    expect(body.drawing.name).toBe('Updated Part');
+  });
+
+  it('returns 400 for invalid metadata JSON', async () => {
+    const res = await request(app)
+      .put('/parts/p-001')
+      .set('Cookie', `auth_token=${adminToken}`)
+      .set('Content-Type', 'application/json')
+      .send({ name: 'X', metadata: 'not-json' });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('DELETE /parts/:id', () => {
+  it('returns 403 for non-admin user', async () => {
+    const res = await request(app)
+      .delete('/parts/p-001')
+      .set('Cookie', `auth_token=${approvedUserToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 when part does not exist', async () => {
+    (pgDb.deleteTechDoc as jest.Mock).mockResolvedValueOnce(false);
+    const res = await request(app)
+      .delete('/parts/unknown-id')
+      .set('Cookie', `auth_token=${adminToken}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('deletes part and returns JSON for admin', async () => {
+    (pgDb.deleteTechDoc as jest.Mock).mockResolvedValueOnce(true);
+    const res = await request(app)
+      .delete('/parts/p-001')
+      .set('Cookie', `auth_token=${adminToken}`);
+    expect(res.status).toBe(200);
+    const body = JSON.parse(res.text) as { success: boolean };
+    expect(body.success).toBe(true);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Admin routes
 // ---------------------------------------------------------------------------
