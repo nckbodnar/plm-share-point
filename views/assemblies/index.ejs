@@ -53,7 +53,12 @@
                 <i class="bi bi-diagram-3 me-1"></i>Assembly
               </span>
             </div>
-            <h5 class="card-title mb-1"><%= asm.name %></h5>
+            <h5 class="card-title mb-1">
+              <% if (asm.number) { %>
+                <span class="text-muted fw-normal me-1 small font-monospace"><%= asm.number %></span>
+              <% } %>
+              <%= asm.name %>
+            </h5>
             <% if (asm.description) { %>
               <p class="card-text text-muted small mb-2"><%= asm.description %></p>
             <% } %>

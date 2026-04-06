@@ -10,6 +10,9 @@
 <div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
   <div>
     <h1 class="h3 mb-1">
+      <% if (drawing.number) { %>
+        <span class="text-muted fw-normal me-1 small font-monospace"><%= drawing.number %></span>
+      <% } %>
       <%= drawing.name %>
       <% if (drawing.revision) { %>
         <span class="badge bg-secondary font-monospace ms-2 fs-6"><%= drawing.revision %></span>
@@ -300,15 +303,19 @@
         <div class="card-body">
           <form id="editDrawingForm">
             <div class="row g-3">
-              <div class="col-12 col-md-4">
+              <div class="col-12 col-md-3">
+                <label class="form-label" for="edit-number">Number</label>
+                <input type="text" class="form-control form-control-sm font-monospace" id="edit-number" name="number" value="<%= drawing.number || '' %>" />
+              </div>
+              <div class="col-12 col-md-3">
                 <label class="form-label" for="edit-name">Name</label>
                 <input type="text" class="form-control form-control-sm" id="edit-name" name="name" value="<%= drawing.name %>" required />
               </div>
-              <div class="col-12 col-md-4">
+              <div class="col-12 col-md-3">
                 <label class="form-label" for="edit-revision">Revision</label>
                 <input type="text" class="form-control form-control-sm" id="edit-revision" name="revision" value="<%= drawing.revision || '' %>" />
               </div>
-              <div class="col-12 col-md-4">
+              <div class="col-12 col-md-3">
                 <label class="form-label" for="edit-description">Description</label>
                 <input type="text" class="form-control form-control-sm" id="edit-description" name="description" value="<%= drawing.description || '' %>" />
               </div>

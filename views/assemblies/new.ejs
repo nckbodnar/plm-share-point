@@ -20,6 +20,10 @@
         <form method="POST" action="/assemblies">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
           <div class="mb-3">
+            <label class="form-label">Number</label>
+            <input type="text" name="number" class="form-control font-monospace" placeholder="e.g. ASM-00123" />
+          </div>
+          <div class="mb-3">
             <label class="form-label">Name <span class="text-danger">*</span></label>
             <input type="text" name="name" class="form-control" required placeholder="Assembly name" />
           </div>

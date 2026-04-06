@@ -4,7 +4,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth';
 import {
   listAssemblies, getTechDoc, getAssemblyComponents,
   addComponentToAssembly, removeComponentFromAssembly,
-  listTechDocs, createTechDoc, updateTechDoc, deleteTechDoc, logAccess, listRevisions,
+  listTechDocs, createTechDoc, updateTechDoc, logAccess, listRevisions,
 } from '../pgDb';
 
 const router = Router();
@@ -47,12 +47,13 @@ router.get('/new', requireAdmin, async (req, res) => {
 router.post('/', requireAdmin, async (req, res) => {
   try {
     const { name, description, revision } = req.body as Record<string, string>;
+    const number = (req.body as Record<string, string>)['number'];
     if (!name?.trim()) {
       const allDrawings = await listTechDocs();
       res.status(400).render('assemblies/new', { title: 'New Assembly', user: req.user, allDrawings, error: 'Name is required.' });
       return;
     }
-    const drawing = await createTechDoc({ name: name.trim(), description: description?.trim(), revision: revision?.trim() || 'A' });
+    const drawing = await createTechDoc({ number: number?.trim() || undefined, name: name.trim(), description: description?.trim(), revision: revision?.trim() || 'A', type: 'assembly' });
     res.redirect(`/assemblies/${drawing.id}`);
   } catch (err) {
     console.error('[assemblies] POST / error:', err);
@@ -97,41 +98,6 @@ router.get('/:id', viewLimiter, async (req, res) => {
     console.error('[assemblies] GET /:id error:', err);
     res.status(500).render('error', { title: 'Error', message: 'Could not retrieve assembly.', user: req.user });
   }
-});
-
-// ── Update (PUT JSON) ─────────────────────────────────────────────────────────
-router.put('/:id', requireAdmin, async (req, res) => {
-  try {
-    const body = req.body as Record<string, unknown>;
-    const updated = await updateTechDoc((req.params['id'] as string), {
-      name: body['name'] as string | undefined,
-      description: body['description'] as string | undefined,
-      revision: body['revision'] as string | undefined,
-    });
-    if (!updated) { res.status(404).json({ error: 'Assembly not found' }); return; }
-    res.json({ assembly: updated });
-  } catch (err) {
-    console.error('[assemblies] PUT /:id error:', err);
-    res.status(500).json({ error: 'Failed to update assembly' });
-  }
-});
-
-// ── Delete (DELETE JSON) ───────────────────────────────────────────────────────
-router.delete('/:id', requireAdmin, async (req, res) => {
-  try {
-    const ok = await deleteTechDoc((req.params['id'] as string));
-    if (!ok) { res.status(404).json({ error: 'Assembly not found' }); return; }
-    res.json({ success: true });
-  } catch (err) {
-    console.error('[assemblies] DELETE /:id error:', err);
-    res.status(500).json({ error: 'Failed to delete assembly' });
-  }
-});
-
-// ── Delete (form POST fallback) ────────────────────────────────────────────────
-router.post('/:id/delete', requireAdmin, async (req, res) => {
-  await deleteTechDoc((req.params['id'] as string));
-  res.redirect('/assemblies');
 });
 
 router.post('/:id/components', requireAdmin, async (req, res) => {
@@ -233,6 +199,24 @@ router.get('/:id/bom.json', viewLimiter, async (req, res) => {
   } catch (err) {
     console.error('[assemblies] GET /:id/bom.json error:', err);
     res.status(500).json({ error: 'Could not build BOM data.' });
+  }
+});
+
+// ── Update (PUT JSON) ──────────────────────────────────────────────────────────
+router.put('/:id', requireAdmin, async (req, res) => {
+  try {
+    const body = req.body as Record<string, unknown>;
+    const updated = await updateTechDoc((req.params['id'] as string), {
+      name: body['name'] as string | undefined,
+      number: body['number'] as string | undefined,
+      description: body['description'] as string | undefined,
+      revision: body['revision'] as string | undefined,
+    });
+    if (!updated) { res.status(404).json({ error: 'Assembly not found' }); return; }
+    res.json({ assembly: updated });
+  } catch (err) {
+    console.error('[assemblies] PUT /:id error:', err);
+    res.status(500).json({ error: 'Failed to update assembly' });
   }
 });
 

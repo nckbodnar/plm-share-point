@@ -76,14 +76,18 @@ CREATE TABLE IF NOT EXISTS group_projects (
 
 CREATE TABLE IF NOT EXISTS tech_docs (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  number      TEXT,
   name        TEXT NOT NULL,
   description TEXT,
   revision    TEXT NOT NULL DEFAULT 'A',
   file_path   TEXT,
   metadata    JSONB NOT NULL DEFAULT '{}',
+  type        TEXT NOT NULL DEFAULT 'part',
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE tech_docs ADD COLUMN IF NOT EXISTS number TEXT;
+ALTER TABLE tech_docs ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'part';
 
 CREATE TABLE IF NOT EXISTS tech_doc_projects (
   tech_doc_id UUID NOT NULL REFERENCES tech_docs(id) ON DELETE CASCADE,
@@ -149,9 +153,11 @@ export async function initPgDb(): Promise<void> {
 function rowToTechDoc(row: Record<string, unknown>): TechDoc {
   return {
     id: row['id'] as string,
+    number: (row['number'] as string | null) ?? undefined,
     name: row['name'] as string,
     description: (row['description'] as string | null) ?? undefined,
     revision: row['revision'] as string,
+    type: (row['type'] as string | null) ?? 'part',
     filePath: (row['file_path'] as string | null) ?? undefined,
     metadata: (row['metadata'] as TechDocMetadata) ?? {},
     createdAt: (row['created_at'] as Date).toISOString(),
@@ -188,17 +194,19 @@ function rowToGroup(row: Record<string, unknown>): Group {
 // ── Drawing CRUD ──────────────────────────────────────────────────────────────
 
 export async function createTechDoc(data: {
+  number?: string;
   name: string;
   description?: string;
   revision?: string;
+  type?: string;
   metadata?: TechDocMetadata;
 }): Promise<TechDoc> {
   const db = getPool();
   const { rows } = await db.query(
-    `INSERT INTO tech_docs (name, description, revision, metadata)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO tech_docs (number, name, description, revision, type, metadata)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [data.name, data.description ?? null, data.revision ?? 'A', JSON.stringify(data.metadata ?? {})],
+    [data.number ?? null, data.name, data.description ?? null, data.revision ?? 'A', data.type ?? 'part', JSON.stringify(data.metadata ?? {})],
   );
   return rowToTechDoc(rows[0] as Record<string, unknown>);
 }
@@ -214,6 +222,7 @@ export async function listTechDocs(filters?: {
   projectId?: string;
   locationId?: string;
   search?: string;
+  type?: string;
   metadata?: Record<string, unknown>;
 }): Promise<TechDoc[]> {
   const db = getPool();
@@ -230,7 +239,11 @@ export async function listTechDocs(filters?: {
   }
   if (filters?.search) {
     params.push(`%${filters.search}%`);
-    conditions.push(`(d.name ILIKE $${params.length} OR d.description ILIKE $${params.length})`);
+    conditions.push(`(d.name ILIKE $${params.length} OR d.number ILIKE $${params.length} OR d.description ILIKE $${params.length})`);
+  }
+  if (filters?.type) {
+    params.push(filters.type);
+    conditions.push(`d.type = $${params.length}`);
   }
   if (filters?.metadata) {
     params.push(JSON.stringify(filters.metadata));
@@ -248,8 +261,10 @@ export async function updateTechDoc(id: string, data: Partial<TechDoc>): Promise
   const params: unknown[] = [];
 
   if (data.name !== undefined) { params.push(data.name); sets.push(`name = $${params.length}`); }
+  if (data.number !== undefined) { params.push(data.number); sets.push(`number = $${params.length}`); }
   if (data.description !== undefined) { params.push(data.description); sets.push(`description = $${params.length}`); }
   if (data.revision !== undefined) { params.push(data.revision); sets.push(`revision = $${params.length}`); }
+  if (data.type !== undefined) { params.push(data.type); sets.push(`type = $${params.length}`); }
   if (data.metadata !== undefined) { params.push(JSON.stringify(data.metadata)); sets.push(`metadata = $${params.length}`); }
 
   if (sets.length === 0) return getTechDoc(id);

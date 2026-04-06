@@ -19,14 +19,6 @@ const router = Router();
 
 const docLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
 
-const pdfFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
-  if (file.mimetype === 'application/pdf' || path.extname(file.originalname).toLowerCase() === '.pdf') {
-    cb(null, true);
-  } else {
-    cb(new Error('Only PDF files are allowed'));
-  }
-};
-
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     const dir = path.join(config.uploadDir, 'parts');
@@ -53,12 +45,24 @@ const revisionStorage = multer.diskStorage({
 const uploadRevision = multer({
   storage: revisionStorage,
   limits: { fileSize: 50 * 1024 * 1024 },
-  fileFilter: pdfFilter,
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || path.extname(file.originalname).toLowerCase() === '.pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'));
+    }
+  },
 });
 const upload = multer({
   storage,
   limits: { fileSize: 50 * 1024 * 1024 },
-  fileFilter: pdfFilter,
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || path.extname(file.originalname).toLowerCase() === '.pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'));
+    }
+  },
 });
 
 router.use(requireAuth);
@@ -69,14 +73,18 @@ router.get('/', async (req, res) => {
     const q = (req.query['q'] as string) || '';
     const projectFilter = (req.query['project'] as string) || '';
     const locationFilter = (req.query['location'] as string) || '';
+    const typeFilter = (req.query['type'] as string) || '';
     const userEmail = req.user!.email;
 
     let docs = req.user!.isAdmin
-      ? await listTechDocs({ search: q || undefined, projectId: projectFilter || undefined, locationId: locationFilter || undefined })
+      ? await listTechDocs({ search: q || undefined, projectId: projectFilter || undefined, locationId: locationFilter || undefined, type: typeFilter || undefined })
       : await getTechDocsForUser(userEmail);
 
     if (q && !req.user!.isAdmin) {
       docs = docs.filter(d => d.name.toLowerCase().includes(q.toLowerCase()) || (d.description ?? '').toLowerCase().includes(q.toLowerCase()));
+    }
+    if (typeFilter && !req.user!.isAdmin) {
+      docs = docs.filter(d => d.type === typeFilter);
     }
 
     const docsWithProjects = await Promise.all(
@@ -94,6 +102,7 @@ router.get('/', async (req, res) => {
       search: q,
       selectedProject: projectFilter,
       selectedLocation: locationFilter,
+      selectedType: typeFilter,
     });
   } catch (err) {
     console.error('[parts] GET / error:', err);
@@ -111,45 +120,11 @@ router.get('/new', requireAdmin, async (req, res) => {
   }
 });
 
-// ── Edit form ─────────────────────────────────────────────────────────────────
-router.get('/:id/edit', requireAdmin, async (req, res) => {
-  try {
-    const doc = await getTechDoc((req.params['id'] as string));
-    if (!doc) {
-      res.status(404).render('error', { title: 'Not Found', message: 'Part not found.', user: req.user });
-      return;
-    }
-    const [projects, locations] = await Promise.all([listProjects(), listLocations()]);
-    res.render('parts/edit', { title: 'Edit Part', user: req.user, drawing: doc, projects, locations, error: null });
-  } catch (_err) {
-    res.status(500).render('error', { title: 'Error', message: 'Failed to load part.', user: req.user });
-  }
-});
-
-// ── Update (form POST) ────────────────────────────────────────────────────────
-router.post('/:id', requireAdmin, async (req, res) => {
-  try {
-    const { name, description, revision} = req.body as Record<string, string>;
-    let metadata: TechDocMetadata | undefined;
-    try { metadata = JSON.parse((req.body as Record<string, string>)['metadata'] || '{}'); } catch { metadata = undefined; }
-
-    if (!name?.trim()) {
-      const doc = await getTechDoc((req.params['id'] as string));
-      const [projects, locations] = await Promise.all([listProjects(), listLocations()]);
-      res.status(400).render('parts/edit', { title: 'Edit Part', user: req.user, drawing: doc, projects, locations, error: 'Name is required.' });
-      return;
-    }
-    await updateTechDoc((req.params['id'] as string), { name: name.trim(), description: description?.trim(), revision: revision?.trim(), metadata });
-    res.redirect(`/parts/${req.params['id']}`);
-  } catch (_err) {
-    res.status(500).render('error', { title: 'Error', message: 'Failed to update part.', user: req.user });
-  }
-});
-
 // ── Create ────────────────────────────────────────────────────────────────────
 router.post('/', requireAdmin, async (req, res) => {
   try {
     const { name, description, revision } = req.body as Record<string, string>;
+    const number = (req.body as Record<string, string>)['number'];
     let metadata: TechDocMetadata = {};
     try { metadata = JSON.parse((req.body as Record<string, string>)['metadata'] || '{}'); } catch { metadata = {}; }
 
@@ -159,12 +134,17 @@ router.post('/', requireAdmin, async (req, res) => {
       return;
     }
 
-    const doc = await createTechDoc({ name: name.trim(), description: description?.trim(), revision: revision?.trim() || 'A', metadata });
+    const doc = await createTechDoc({ number: number?.trim() || undefined, name: name.trim(), description: description?.trim(), revision: revision?.trim() || 'A', type: 'part', metadata });
     res.redirect(`/parts/${doc.id}`);
   } catch (err) {
     console.error('[parts] POST / error:', err);
     res.status(500).render('error', { title: 'Error', message: 'Failed to create part.', user: req.user });
   }
+});
+
+// ── Edit (redirect to detail) ──────────────────────────────────────────────
+router.get('/:id/edit', requireAdmin, (req, res) => {
+  res.redirect(`/parts/${req.params['id']}`);
 });
 
 // ── Detail ────────────────────────────────────────────────────────────────────
@@ -207,6 +187,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
     }
     const updated = await updateTechDoc((req.params['id'] as string), {
       name: body['name'] as string | undefined,
+      number: body['number'] as string | undefined,
       description: body['description'] as string | undefined,
       revision: body['revision'] as string | undefined,
       metadata,

@@ -135,9 +135,11 @@ export interface AuditEntry {
 
 export interface TechDoc {
   id: string;
+  number?: string;
   name: string;
   description?: string;
   revision: string;
+  type: string;
   filePath?: string;
   metadata: TechDocMetadata;
   createdAt: string;
