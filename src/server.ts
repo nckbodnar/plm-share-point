@@ -14,7 +14,7 @@ import assembliesRouter from './routes/assemblies';
 import projectsRouter from './routes/projects';
 import locationsRouter from './routes/locations';
 import groupsRouter from './routes/groups';
-import { getPool, initPgDb } from './pgDb'; // ensure PostgreSQL pool is initialised
+import { initPgDb } from './pgDb'; // ensure PostgreSQL pool is initialised
 
 const app = express();
 

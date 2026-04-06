@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { requireAdmin } from '../middleware/auth';
 import {
   getAllUsers, getPendingUsers, approveUser, rejectUser, revokeUser,
-  findUserById, getAuditLog, getAuditLogFiltered, getAuditStats, updatePassword,
+  findUserById, getAuditLogFiltered, getAuditStats, updatePassword,
   listGroups, listLocations, getGroupsForUser, getLocationsForUser,
   removeAllGroupsFromUser, addUserToGroup,
   removeAllLocationsFromUser, addLocationToUser,

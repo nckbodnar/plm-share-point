@@ -19,6 +19,14 @@ const router = Router();
 
 const docLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
 
+const pdfFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  if (file.mimetype === 'application/pdf' || path.extname(file.originalname).toLowerCase() === '.pdf') {
+    cb(null, true);
+  } else {
+    cb(new Error('Only PDF files are allowed'));
+  }
+};
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     const dir = path.join(config.uploadDir, 'parts');
@@ -45,24 +53,12 @@ const revisionStorage = multer.diskStorage({
 const uploadRevision = multer({
   storage: revisionStorage,
   limits: { fileSize: 50 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype === 'application/pdf' || path.extname(file.originalname).toLowerCase() === '.pdf') {
-      cb(null, true);
-    } else {
-      cb(new Error('Only PDF files are allowed'));
-    }
-  },
+  fileFilter: pdfFilter,
 });
 const upload = multer({
   storage,
   limits: { fileSize: 50 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype === 'application/pdf' || path.extname(file.originalname).toLowerCase() === '.pdf') {
-      cb(null, true);
-    } else {
-      cb(new Error('Only PDF files are allowed'));
-    }
-  },
+  fileFilter: pdfFilter,
 });
 
 router.use(requireAuth);
@@ -134,11 +130,6 @@ router.post('/', requireAdmin, async (req, res) => {
     console.error('[parts] POST / error:', err);
     res.status(500).render('error', { title: 'Error', message: 'Failed to create part.', user: req.user });
   }
-});
-
-// ── Edit (redirect to detail) ──────────────────────────────────────────────
-router.get('/:id/edit', requireAdmin, (req, res) => {
-  res.redirect(`/parts/${req.params['id']}`);
 });
 
 // ── Detail ────────────────────────────────────────────────────────────────────

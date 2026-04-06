@@ -16,14 +16,20 @@ jest.mock('../src/pgDb', () => ({
   rejectUser: jest.fn().mockResolvedValue(undefined),
   revokeUser: jest.fn().mockResolvedValue(undefined),
   updatePassword: jest.fn().mockResolvedValue(undefined),
-  getAuditLog: jest.fn().mockResolvedValue([]),
+  getAuditLogFiltered: jest.fn().mockResolvedValue({ entries: [], total: 0, page: 1, pageSize: 50, totalPages: 0 }),
+  getAuditStats: jest.fn().mockResolvedValue({ totalViews: 0, uniqueUsers: 0, uniqueParts: 0, viewsToday: 0, topParts: [], topUsers: [], viewsByDay: [], viewsByAction: [], viewsByProject: [], recentUsers: [] }),
   logAccess: jest.fn().mockResolvedValue(undefined),
-  listDrawings: jest.fn().mockResolvedValue([]),
+  listTechDocs: jest.fn().mockResolvedValue([]),
+  getTechDocsForUser: jest.fn().mockResolvedValue([]),
+  getProjectsForTechDoc: jest.fn().mockResolvedValue([]),
+  getLocationsForTechDoc: jest.fn().mockResolvedValue([]),
   listProjects: jest.fn().mockResolvedValue([]),
   listGroups: jest.fn().mockResolvedValue([]),
+  listGroupsWithCounts: jest.fn().mockResolvedValue([]),
   listLocations: jest.fn().mockResolvedValue([]),
   listAssemblies: jest.fn().mockResolvedValue([]),
-  getDrawing: jest.fn().mockResolvedValue(null),
+  listRevisions: jest.fn().mockResolvedValue([]),
+  getTechDoc: jest.fn().mockResolvedValue(null),
   getAssemblyComponents: jest.fn().mockResolvedValue([]),
   getGroupsForUser: jest.fn().mockResolvedValue([]),
   getLocationsForUser: jest.fn().mockResolvedValue([]),
@@ -176,7 +182,7 @@ describe('POST /request-access', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Parts routes (now redirect to /drawings)
+// Parts routes
 // ---------------------------------------------------------------------------
 
 describe('GET /parts', () => {
@@ -185,12 +191,12 @@ describe('GET /parts', () => {
     expect([301, 302]).toContain(res.status);
   });
 
-  it('redirects to /drawings', async () => {
+  it('returns 200 with parts list when authenticated', async () => {
     const res = await request(app)
       .get('/parts')
       .set('Cookie', `auth_token=${approvedUserToken}`);
-    expect(res.status).toBe(301);
-    expect(res.headers['location']).toBe('/drawings');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Parts');
   });
 });
 
@@ -282,7 +288,7 @@ describe('GET /assemblies', () => {
 
 describe('GET /assemblies/:id', () => {
   it('returns 404 for unknown assembly', async () => {
-    (pgDb.getDrawing as jest.Mock).mockResolvedValueOnce(null);
+    (pgDb.getTechDoc as jest.Mock).mockResolvedValueOnce(null);
     const res = await request(app)
       .get('/assemblies/unknown-id')
       .set('Cookie', `auth_token=${approvedUserToken}`);
@@ -299,7 +305,7 @@ describe('GET /assemblies/:id', () => {
       id: 'asm-001', name: 'Test Assembly', revision: 'A',
       description: 'Test desc', metadata: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
-    (pgDb.getDrawing as jest.Mock).mockResolvedValueOnce(fakeAssembly);
+    (pgDb.getTechDoc as jest.Mock).mockResolvedValueOnce(fakeAssembly);
     (pgDb.getAssemblyComponents as jest.Mock).mockResolvedValueOnce([]);
 
     const res = await request(app)
@@ -316,7 +322,7 @@ describe('GET /assemblies/:id/bom.json', () => {
       id: 'asm-001', name: 'Test Assembly', revision: 'A',
       description: null, metadata: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
-    (pgDb.getDrawing as jest.Mock).mockResolvedValueOnce(fakeAssembly);
+    (pgDb.getTechDoc as jest.Mock).mockResolvedValueOnce(fakeAssembly);
     (pgDb.getAssemblyComponents as jest.Mock).mockResolvedValueOnce([]);
 
     const res = await request(app)
@@ -334,7 +340,7 @@ describe('GET /assemblies/:id/bom.json', () => {
       id: 'asm-001', name: 'Test Assembly', revision: 'A',
       description: null, metadata: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
-    (pgDb.getDrawing as jest.Mock).mockResolvedValueOnce(fakeAssembly);
+    (pgDb.getTechDoc as jest.Mock).mockResolvedValueOnce(fakeAssembly);
     (pgDb.getAssemblyComponents as jest.Mock).mockResolvedValueOnce([]);
 
     const res = await request(app)
@@ -346,7 +352,7 @@ describe('GET /assemblies/:id/bom.json', () => {
   });
 
   it('returns 404 JSON for unknown assembly', async () => {
-    (pgDb.getDrawing as jest.Mock).mockResolvedValueOnce(null);
+    (pgDb.getTechDoc as jest.Mock).mockResolvedValueOnce(null);
     const res = await request(app)
       .get('/assemblies/unknown-asm/bom.json')
       .set('Cookie', `auth_token=${approvedUserToken}`);

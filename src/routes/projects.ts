@@ -43,11 +43,6 @@ router.post('/', requireAdmin, async (req, res) => {
 });
 
 // ── Detail ────────────────────────────────────────────────────────────────────
-// ── Edit (redirect to detail which has inline editing) ─────────────────────
-router.get('/:id/edit', requireAdmin, (req, res) => {
-  res.redirect(`/projects/${req.params['id']}`);
-});
-
 router.get('/:id', async (req, res) => {
   try {
     const project = await getProject((req.params['id'] as string));
