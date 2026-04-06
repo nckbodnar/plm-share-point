@@ -73,14 +73,18 @@ router.get('/', async (req, res) => {
     const q = (req.query['q'] as string) || '';
     const projectFilter = (req.query['project'] as string) || '';
     const locationFilter = (req.query['location'] as string) || '';
+    const typeFilter = (req.query['type'] as string) || '';
     const userEmail = req.user!.email;
 
     let docs = req.user!.isAdmin
-      ? await listTechDocs({ search: q || undefined, projectId: projectFilter || undefined, locationId: locationFilter || undefined })
+      ? await listTechDocs({ search: q || undefined, projectId: projectFilter || undefined, locationId: locationFilter || undefined, type: typeFilter || undefined })
       : await getTechDocsForUser(userEmail);
 
     if (q && !req.user!.isAdmin) {
       docs = docs.filter(d => d.name.toLowerCase().includes(q.toLowerCase()) || (d.description ?? '').toLowerCase().includes(q.toLowerCase()));
+    }
+    if (typeFilter && !req.user!.isAdmin) {
+      docs = docs.filter(d => d.type === typeFilter);
     }
 
     const docsWithProjects = await Promise.all(
@@ -98,6 +102,7 @@ router.get('/', async (req, res) => {
       search: q,
       selectedProject: projectFilter,
       selectedLocation: locationFilter,
+      selectedType: typeFilter,
     });
   } catch (err) {
     console.error('[parts] GET / error:', err);
@@ -119,6 +124,7 @@ router.get('/new', requireAdmin, async (req, res) => {
 router.post('/', requireAdmin, async (req, res) => {
   try {
     const { name, description, revision } = req.body as Record<string, string>;
+    const number = (req.body as Record<string, string>)['number'];
     let metadata: TechDocMetadata = {};
     try { metadata = JSON.parse((req.body as Record<string, string>)['metadata'] || '{}'); } catch { metadata = {}; }
 
@@ -128,7 +134,7 @@ router.post('/', requireAdmin, async (req, res) => {
       return;
     }
 
-    const doc = await createTechDoc({ name: name.trim(), description: description?.trim(), revision: revision?.trim() || 'A', metadata });
+    const doc = await createTechDoc({ number: number?.trim() || undefined, name: name.trim(), description: description?.trim(), revision: revision?.trim() || 'A', type: 'part', metadata });
     res.redirect(`/parts/${doc.id}`);
   } catch (err) {
     console.error('[parts] POST / error:', err);
@@ -181,6 +187,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
     }
     const updated = await updateTechDoc((req.params['id'] as string), {
       name: body['name'] as string | undefined,
+      number: body['number'] as string | undefined,
       description: body['description'] as string | undefined,
       revision: body['revision'] as string | undefined,
       metadata,

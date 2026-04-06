@@ -27,6 +27,7 @@ app.use(
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'unpkg.com'],
+        scriptSrcAttr: ["'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'unpkg.com'],
         fontSrc: ["'self'", 'cdn.jsdelivr.net', 'unpkg.com', 'data:'],
         imgSrc: ["'self'", 'data:'],

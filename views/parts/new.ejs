@@ -21,6 +21,10 @@
     <form method="POST" action="/parts">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
       <div class="mb-3">
+        <label class="form-label fw-semibold" for="number">Number</label>
+        <input type="text" class="form-control font-monospace" id="number" name="number" placeholder="e.g. PN-00123" />
+      </div>
+      <div class="mb-3">
         <label class="form-label fw-semibold" for="name">Name <span class="text-danger">*</span></label>
         <input type="text" class="form-control" id="name" name="name" required autofocus />
       </div>

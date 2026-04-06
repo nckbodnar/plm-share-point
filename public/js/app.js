@@ -63,16 +63,26 @@ async function removeMember(btn) {
  * Serialize a form as JSON and PUT it to `url`, then reload on success.
  */
 async function submitEdit(url, formId, csrf) {
-  const form = document.getElementById(formId);
-  const body = {};
-  new FormData(form).forEach((v, k) => { body[k] = v; });
-  const r = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
-    body: JSON.stringify(body),
-  });
-  if (r.ok) window.location.reload();
-  else alert('Save failed: ' + await r.text());
+  try {
+    const form = document.getElementById(formId);
+    if (!form) { alert('Save failed: form not found.'); return; }
+    const body = {};
+    new FormData(form).forEach((v, k) => { body[k] = v; });
+    const r = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+      body: JSON.stringify(body),
+    });
+    if (r.ok) window.location.reload();
+    else {
+      const text = await r.text();
+      let msg;
+      try { msg = JSON.parse(text).error ?? text; } catch { msg = text; }
+      alert('Save failed: ' + msg);
+    }
+  } catch (err) {
+    alert('Save failed: ' + (err instanceof Error ? err.message : String(err)));
+  }
 }
 
 /**
